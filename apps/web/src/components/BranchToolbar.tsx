@@ -13,6 +13,7 @@ import {
 import { BranchToolbarBranchSelector } from "./BranchToolbarBranchSelector";
 import { BranchToolbarEnvironmentSelector } from "./BranchToolbarEnvironmentSelector";
 import { BranchToolbarEnvModeSelector } from "./BranchToolbarEnvModeSelector";
+import { BranchToolbarJiraKeyControl } from "./BranchToolbarJiraKeyControl";
 import { Separator } from "./ui/separator";
 
 interface BranchToolbarProps {
@@ -99,19 +100,32 @@ export const BranchToolbar = memo(function BranchToolbar({
           activeWorktreePath={activeWorktreePath}
           onEnvModeChange={onEnvModeChange}
         />
+        <Separator orientation="vertical" className="mx-0.5 h-3.5!" />
+        <BranchToolbarJiraKeyControl
+          environmentId={environmentId}
+          threadId={threadId}
+          projectCwd={activeProject.cwd}
+          effectiveEnvMode={effectiveEnvMode}
+          {...(draftId ? { draftId } : {})}
+          {...(serverThread ? { serverThread } : {})}
+          draftThread={draftThread}
+          {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+        />
       </div>
 
-      <BranchToolbarBranchSelector
-        environmentId={environmentId}
-        threadId={threadId}
-        {...(draftId ? { draftId } : {})}
-        envLocked={envLocked}
-        {...(effectiveEnvModeOverride ? { effectiveEnvModeOverride } : {})}
-        {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
-        {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
-        {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
-        {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
-      />
+      <div className="flex items-center gap-1">
+        <BranchToolbarBranchSelector
+          environmentId={environmentId}
+          threadId={threadId}
+          {...(draftId ? { draftId } : {})}
+          envLocked={envLocked}
+          {...(effectiveEnvModeOverride ? { effectiveEnvModeOverride } : {})}
+          {...(activeThreadBranchOverride !== undefined ? { activeThreadBranchOverride } : {})}
+          {...(onActiveThreadBranchOverrideChange ? { onActiveThreadBranchOverrideChange } : {})}
+          {...(onCheckoutPullRequestRequest ? { onCheckoutPullRequestRequest } : {})}
+          {...(onComposerFocusRequest ? { onComposerFocusRequest } : {})}
+        />
+      </div>
     </div>
   );
 });

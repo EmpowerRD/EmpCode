@@ -196,6 +196,7 @@ function createBaseServerConfig(): ServerConfig {
 function createMockEnvironmentApi(input: {
   browse: EnvironmentApi["filesystem"]["browse"];
   dispatchCommand: EnvironmentApi["orchestration"]["dispatchCommand"];
+  setThreadJiraKey?: EnvironmentApi["orchestration"]["setThreadJiraKey"];
 }): EnvironmentApi {
   return {
     terminal: {} as EnvironmentApi["terminal"],
@@ -206,6 +207,11 @@ function createMockEnvironmentApi(input: {
     git: {} as EnvironmentApi["git"],
     orchestration: {
       dispatchCommand: input.dispatchCommand,
+      setThreadJiraKey:
+        input.setThreadJiraKey ??
+        (async () => {
+          throw new Error("Not implemented in browser test.");
+        }),
       getTurnDiff: (() => {
         throw new Error("Not implemented in browser test.");
       }) as EnvironmentApi["orchestration"]["getTurnDiff"],
@@ -656,6 +662,7 @@ function setDraftThreadWithoutWorktree(): void {
         createdAt: NOW_ISO,
         runtimeMode: "full-access",
         interactionMode: "default",
+        jiraKey: null,
         branch: null,
         worktreePath: null,
         envMode: "local",
@@ -2076,6 +2083,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: null,
           worktreePath: null,
           envMode: "local",
@@ -2155,6 +2163,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: "feature/draft",
           worktreePath: "/repo/worktrees/feature-draft",
           envMode: "worktree",
@@ -2221,6 +2230,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: null,
           worktreePath: null,
           envMode: "local",
@@ -2349,6 +2359,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: "main",
           worktreePath: null,
           envMode: "worktree",
@@ -2733,6 +2744,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: "main",
           worktreePath: null,
           envMode: "worktree",
@@ -2870,6 +2882,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: "main",
           worktreePath: null,
           envMode: "worktree",
@@ -2882,6 +2895,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: "main",
           worktreePath: null,
           envMode: "worktree",
@@ -3008,6 +3022,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
           createdAt: NOW_ISO,
           runtimeMode: "full-access",
           interactionMode: "default",
+          jiraKey: null,
           branch: "feature/selected",
           worktreePath: null,
           envMode: "worktree",

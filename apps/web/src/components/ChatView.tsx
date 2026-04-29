@@ -2598,6 +2598,7 @@ export default function ChatView(props: ChatViewProps) {
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
                       interactionMode,
+                      jiraKey: activeThread.jiraKey,
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
                       createdAt: activeThread.createdAt,
@@ -2609,7 +2610,7 @@ export default function ChatView(props: ChatViewProps) {
                     prepareWorktree: {
                       projectCwd: activeProject.cwd,
                       baseBranch: baseBranchForWorktree,
-                      branch: buildTemporaryWorktreeBranchName(),
+                      branch: buildTemporaryWorktreeBranchName(activeThread.jiraKey ?? undefined),
                     },
                     runSetupScript: true,
                   }
@@ -3051,6 +3052,7 @@ export default function ChatView(props: ChatViewProps) {
         modelSelection: nextThreadModelSelection,
         runtimeMode,
         interactionMode: "default",
+        jiraKey: activeThread.jiraKey ?? null,
         branch: activeThreadBranch,
         worktreePath: activeThread.worktreePath,
         createdAt,

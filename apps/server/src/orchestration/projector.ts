@@ -257,6 +257,7 @@ export function projectEvent(
             modelSelection: payload.modelSelection,
             runtimeMode: payload.runtimeMode,
             interactionMode: payload.interactionMode,
+            jiraKey: payload.jiraKey,
             branch: payload.branch,
             worktreePath: payload.worktreePath,
             latestTurn: null,
@@ -323,6 +324,7 @@ export function projectEvent(
             ...(payload.modelSelection !== undefined
               ? { modelSelection: payload.modelSelection }
               : {}),
+            ...(payload.jiraKey !== undefined ? { jiraKey: payload.jiraKey } : {}),
             ...(payload.branch !== undefined ? { branch: payload.branch } : {}),
             ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
             updatedAt: payload.updatedAt,

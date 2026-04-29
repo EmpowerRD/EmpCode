@@ -24,6 +24,7 @@ import {
   ModelSelection,
 } from "@t3tools/contracts";
 import {
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
   detectGitHostingProviderFromRemoteUrl,
   mergeGitStatusParts,
   resolveAutoFeatureBranchName,
@@ -141,7 +142,7 @@ function resolvePullRequestWorktreeLocalBranchName(
 
   const sanitizedHeadBranch = sanitizeBranchFragment(pullRequest.headBranch).trim();
   const suffix = sanitizedHeadBranch.length > 0 ? sanitizedHeadBranch : "head";
-  return `t3code/pr-${pullRequest.number}/${suffix}`;
+  return `${DEFAULT_WORKTREE_BRANCH_PREFIX}/pr-${pullRequest.number}/${suffix}`;
 }
 
 function parseGitHubRepositoryNameWithOwnerFromRemoteUrl(url: string | null): string | null {

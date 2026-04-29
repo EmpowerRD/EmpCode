@@ -18,6 +18,7 @@ import {
   ProjectWriteFileError,
   OrchestrationReplayEventsError,
   FilesystemBrowseError,
+  ProjectId,
   ThreadId,
   type TerminalEvent,
   WS_METHODS,
@@ -26,6 +27,15 @@ import {
 import { clamp } from "effect/Number";
 import { HttpRouter, HttpServerRequest } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import {
+  buildSemanticWorktreeBranchName,
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
+  deriveWorktreeBranchSuffix,
+  isMainOrMasterBranchName,
+  isTemporaryWorktreeBranchForPrefix,
+  normalizeWorktreeBranchPrefix,
+  sanitizeBranchFragment,
+} from "@t3tools/shared/git";
 
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery.ts";
 import { ServerConfig } from "./config.ts";
@@ -445,6 +455,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                 modelSelection: bootstrap.createThread.modelSelection,
                 runtimeMode: bootstrap.createThread.runtimeMode,
                 interactionMode: bootstrap.createThread.interactionMode,
+                jiraKey: bootstrap.createThread.jiraKey,
                 branch: bootstrap.createThread.branch,
                 worktreePath: bootstrap.createThread.worktreePath,
                 createdAt: bootstrap.createThread.createdAt,
@@ -544,12 +555,209 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           .refreshStatus(cwd)
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
+      const loadProjectShell = (projectId: ProjectId) =>
+        projectionSnapshotQuery.getProjectShellById(projectId).pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestrationDispatchCommandError({
+                message: "Failed to load project for Jira key validation",
+                cause,
+              }),
+          ),
+          Effect.flatMap((projectOption) =>
+            Option.isSome(projectOption)
+              ? Effect.succeed(projectOption.value)
+              : Effect.fail(
+                  new OrchestrationDispatchCommandError({
+                    message: `Project ${projectId} was not found.`,
+                  }),
+                ),
+          ),
+        );
+
+      const loadThreadDetail = (threadId: ThreadId) =>
+        projectionSnapshotQuery.getThreadDetailById(threadId).pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestrationDispatchCommandError({
+                message: "Failed to load thread for Jira key validation",
+                cause,
+              }),
+          ),
+          Effect.flatMap((threadOption) =>
+            Option.isSome(threadOption)
+              ? Effect.succeed(threadOption.value)
+              : Effect.fail(
+                  new OrchestrationDispatchCommandError({
+                    message: `Thread ${threadId} was not found.`,
+                  }),
+                ),
+          ),
+        );
+
+      const ensureJiraKeyAllowedForContext = (input: {
+        readonly jiraKey: string | null | undefined;
+        readonly projectId: ProjectId;
+        readonly branch: string | null;
+        readonly isWorktreeContext: boolean;
+      }) =>
+        Effect.gen(function* () {
+          if (input.jiraKey == null || input.isWorktreeContext) {
+            return;
+          }
+
+          const project = yield* loadProjectShell(input.projectId);
+          const status = yield* git.statusDetailsLocal(project.workspaceRoot).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestrationDispatchCommandError({
+                  message: "Failed to inspect the current branch for Jira key validation",
+                  cause,
+                }),
+            ),
+          );
+          const effectiveBranch = status.branch ?? input.branch;
+          if (effectiveBranch !== null && !isMainOrMasterBranchName(effectiveBranch)) {
+            return;
+          }
+
+          return yield* Effect.fail(
+            new OrchestrationDispatchCommandError({
+              message:
+                "Jira keys can only be set for worktree threads or when the current checkout is not main or master.",
+            }),
+          );
+        });
+
+      const updateThreadJiraKey = (input: {
+        readonly threadId: ThreadId;
+        readonly jiraKey: string | null;
+        readonly renameBranch: boolean;
+      }) =>
+        Effect.gen(function* () {
+          const normalizedJiraKey =
+            input.jiraKey === null ? null : normalizeWorktreeBranchPrefix(input.jiraKey);
+          const thread = yield* loadThreadDetail(input.threadId);
+          const project = yield* loadProjectShell(thread.projectId);
+          yield* ensureJiraKeyAllowedForContext({
+            jiraKey: normalizedJiraKey,
+            projectId: thread.projectId,
+            branch: thread.branch,
+            isWorktreeContext: thread.worktreePath !== null,
+          });
+
+          const metaUpdateResult = yield* dispatchNormalizedCommand(
+            yield* normalizeDispatchCommand({
+              type: "thread.meta.update",
+              commandId: serverCommandId("thread-jira-key-update"),
+              threadId: input.threadId,
+              jiraKey: normalizedJiraKey,
+            }),
+          );
+
+          if (!input.renameBranch || normalizedJiraKey === null || !thread.branch) {
+            return metaUpdateResult;
+          }
+
+          const cwd = thread.worktreePath ?? project.workspaceRoot;
+          const currentBranch = thread.branch;
+          const currentSuffix =
+            deriveWorktreeBranchSuffix(currentBranch) ??
+            sanitizeBranchFragment(thread.title) ??
+            "update";
+          const preferredSuffix = isTemporaryWorktreeBranchForPrefix(
+            currentBranch,
+            thread.jiraKey ?? DEFAULT_WORKTREE_BRANCH_PREFIX,
+          )
+            ? sanitizeBranchFragment(thread.title)
+            : currentSuffix;
+          const targetBranch = buildSemanticWorktreeBranchName(
+            normalizedJiraKey,
+            preferredSuffix.length > 0 ? preferredSuffix : "update",
+          );
+
+          if (targetBranch === currentBranch) {
+            return metaUpdateResult;
+          }
+
+          const renamed = yield* git
+            .renameBranch({
+              cwd,
+              oldBranch: currentBranch,
+              newBranch: targetBranch,
+            })
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new OrchestrationDispatchCommandError({
+                    message: "Failed to rename branch after Jira key update",
+                    cause,
+                  }),
+              ),
+            );
+
+          const branchUpdateResult = yield* dispatchNormalizedCommand(
+            yield* normalizeDispatchCommand({
+              type: "thread.meta.update",
+              commandId: serverCommandId("thread-jira-key-branch-update"),
+              threadId: input.threadId,
+              branch: renamed.branch,
+            }),
+          );
+
+          yield* refreshGitStatus(cwd);
+          return branchUpdateResult;
+        });
+
+      const validateNormalizedCommandJiraKeyGuardrail = (normalizedCommand: OrchestrationCommand) =>
+        Effect.gen(function* () {
+          if (normalizedCommand.type === "thread.create") {
+            yield* ensureJiraKeyAllowedForContext({
+              jiraKey: normalizedCommand.jiraKey,
+              projectId: normalizedCommand.projectId,
+              branch: normalizedCommand.branch,
+              isWorktreeContext: normalizedCommand.worktreePath !== null,
+            });
+            return;
+          }
+
+          if (normalizedCommand.type === "thread.meta.update") {
+            if (normalizedCommand.jiraKey === undefined) {
+              return;
+            }
+            const thread = yield* loadThreadDetail(normalizedCommand.threadId);
+            yield* ensureJiraKeyAllowedForContext({
+              jiraKey: normalizedCommand.jiraKey,
+              projectId: thread.projectId,
+              branch: thread.branch,
+              isWorktreeContext: thread.worktreePath !== null,
+            });
+            return;
+          }
+
+          if (normalizedCommand.type === "thread.turn.start" && normalizedCommand.bootstrap) {
+            const bootstrapCreateThread = normalizedCommand.bootstrap.createThread;
+            if (!bootstrapCreateThread) {
+              return;
+            }
+            yield* ensureJiraKeyAllowedForContext({
+              jiraKey: bootstrapCreateThread.jiraKey,
+              projectId: bootstrapCreateThread.projectId,
+              branch: bootstrapCreateThread.branch,
+              isWorktreeContext:
+                bootstrapCreateThread.worktreePath !== null ||
+                normalizedCommand.bootstrap.prepareWorktree !== undefined,
+            });
+          }
+        });
+
       return WsRpcGroup.of({
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
               const normalizedCommand = yield* normalizeDispatchCommand(command);
+              yield* validateNormalizedCommandJiraKeyGuardrail(normalizedCommand);
               const shouldStopSessionAfterArchive =
                 normalizedCommand.type === "thread.archive"
                   ? yield* projectionSnapshotQuery
@@ -611,6 +819,10 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             ),
             { "rpc.aggregate": "orchestration" },
           ),
+        [ORCHESTRATION_WS_METHODS.setThreadJiraKey]: (input) =>
+          observeRpcEffect(ORCHESTRATION_WS_METHODS.setThreadJiraKey, updateThreadJiraKey(input), {
+            "rpc.aggregate": "orchestration",
+          }),
         [ORCHESTRATION_WS_METHODS.getTurnDiff]: (input) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.getTurnDiff,

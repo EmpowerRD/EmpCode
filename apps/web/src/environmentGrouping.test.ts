@@ -60,6 +60,7 @@ function makeSidebarThreadSummary(
   overrides: Partial<SidebarThreadSummary> &
     Pick<SidebarThreadSummary, "id" | "environmentId" | "projectId" | "title">,
 ): SidebarThreadSummary {
+  const { jiraKey = null, ...rest } = overrides;
   return {
     interactionMode: DEFAULT_INTERACTION_MODE,
     session: null,
@@ -67,13 +68,14 @@ function makeSidebarThreadSummary(
     archivedAt: null,
     updatedAt: "2026-01-01T00:00:00.000Z",
     latestTurn: null,
+    jiraKey,
     branch: null,
     worktreePath: null,
     latestUserMessageAt: null,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
     hasActionableProposedPlan: false,
-    ...overrides,
+    ...rest,
   };
 }
 

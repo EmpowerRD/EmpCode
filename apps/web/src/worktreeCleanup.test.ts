@@ -7,6 +7,7 @@ import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "
 const localEnvironmentId = EnvironmentId.make("environment-local");
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
+  const { jiraKey = null, ...rest } = overrides;
   return {
     id: ThreadId.make("thread-1"),
     environmentId: localEnvironmentId,
@@ -28,9 +29,10 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     createdAt: "2026-02-13T00:00:00.000Z",
     archivedAt: null,
     latestTurn: null,
+    jiraKey,
     branch: null,
     worktreePath: null,
-    ...overrides,
+    ...rest,
   };
 }
 

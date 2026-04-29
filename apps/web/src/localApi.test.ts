@@ -85,6 +85,7 @@ const rpcClientMock = {
   },
   orchestration: {
     dispatchCommand: vi.fn(),
+    setThreadJiraKey: vi.fn(),
     getTurnDiff: vi.fn(),
     getFullThreadDiff: vi.fn(),
     subscribeShell: vi.fn((listener: (event: OrchestrationShellStreamItem) => void) =>

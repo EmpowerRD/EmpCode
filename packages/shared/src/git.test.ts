@@ -3,8 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyGitStatusStreamEvent,
+  buildSemanticWorktreeBranchName,
   buildTemporaryWorktreeBranchName,
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
+  deriveWorktreeBranchSuffix,
+  isMainOrMasterBranchName,
   isTemporaryWorktreeBranch,
+  isTemporaryWorktreeBranchForPrefix,
+  normalizeWorktreeBranchPrefix,
   normalizeGitRemoteUrl,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
   WORKTREE_BRANCH_PREFIX,
@@ -68,6 +74,37 @@ describe("isTemporaryWorktreeBranch", () => {
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/feature/demo`)).toBe(false);
     expect(isTemporaryWorktreeBranch("main")).toBe(false);
     expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/deadbeef-extra`)).toBe(false);
+  });
+});
+
+describe("worktree branch helpers", () => {
+  it("uses empcode as the default worktree branch prefix", () => {
+    expect(DEFAULT_WORKTREE_BRANCH_PREFIX).toBe("empcode");
+    expect(normalizeWorktreeBranchPrefix(" EmpCode ")).toBe("empcode");
+  });
+
+  it("preserves jira-style prefixes in uppercase", () => {
+    expect(normalizeWorktreeBranchPrefix("abc-123")).toBe("ABC-123");
+    expect(buildTemporaryWorktreeBranchName("abc-123")).toMatch(/^ABC-123\/[0-9a-f]{8}$/);
+    expect(isTemporaryWorktreeBranchForPrefix("ABC-123/deadbeef", "abc-123")).toBe(true);
+  });
+
+  it("derives a suffix from the namespaced worktree branch", () => {
+    expect(deriveWorktreeBranchSuffix("ABC-123/fix-login-flow")).toBe("fix-login-flow");
+    expect(deriveWorktreeBranchSuffix("main")).toBeNull();
+  });
+
+  it("builds semantic jira worktree branches", () => {
+    expect(buildSemanticWorktreeBranchName("abc-123", "Fix login flow")).toBe(
+      "ABC-123/fix-login-flow",
+    );
+  });
+
+  it("identifies main and master as protected branch names", () => {
+    expect(isMainOrMasterBranchName("main")).toBe(true);
+    expect(isMainOrMasterBranchName("master")).toBe(true);
+    expect(isMainOrMasterBranchName("refs/heads/main")).toBe(true);
+    expect(isMainOrMasterBranchName("feature/main")).toBe(false);
   });
 });
 

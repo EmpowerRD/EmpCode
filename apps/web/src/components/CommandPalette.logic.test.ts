@@ -11,6 +11,7 @@ const LOCAL_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
 const PROJECT_ID = ProjectId.make("project-1");
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
+  const { jiraKey = null, ...rest } = overrides;
   return {
     id: ThreadId.make("thread-1"),
     environmentId: LOCAL_ENVIRONMENT_ID,
@@ -28,11 +29,12 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     archivedAt: null,
     updatedAt: "2026-03-01T00:00:00.000Z",
     latestTurn: null,
+    jiraKey,
     branch: null,
     worktreePath: null,
     turnDiffSummaries: [],
     activities: [],
-    ...overrides,
+    ...rest,
   };
 }
 

@@ -8,6 +8,7 @@
  */
 import {
   IsoDateTime,
+  JiraKey,
   ModelSelection,
   NonNegativeInt,
   ProjectId,
@@ -28,6 +29,7 @@ export const ProjectionThread = Schema.Struct({
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  jiraKey: Schema.NullOr(JiraKey),
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   latestTurnId: Schema.NullOr(TurnId),

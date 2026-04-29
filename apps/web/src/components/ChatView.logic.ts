@@ -44,6 +44,7 @@ export function buildLocalDraftThread(
     createdAt: draftThread.createdAt,
     archivedAt: null,
     latestTurn: null,
+    jiraKey: draftThread.jiraKey ?? null,
     branch: draftThread.branch,
     worktreePath: draftThread.worktreePath,
     turnDiffSummaries: [],

@@ -9,8 +9,16 @@ import type {
 import * as Effect from "effect/Effect";
 import * as Random from "effect/Random";
 
-export const WORKTREE_BRANCH_PREFIX = "t3code";
-const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(`^${WORKTREE_BRANCH_PREFIX}\\/[0-9a-f]{8}$`);
+export const DEFAULT_WORKTREE_BRANCH_PREFIX = "empcode";
+export const WORKTREE_BRANCH_PREFIX = DEFAULT_WORKTREE_BRANCH_PREFIX;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildTemporaryWorktreeBranchPattern(prefix: string): RegExp {
+  return new RegExp(`^${escapeRegExp(prefix)}\\/[0-9a-f]{8}$`, "i");
+}
 
 /**
  * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
@@ -44,6 +52,20 @@ export function sanitizeFeatureBranchName(raw: string): string {
     return sanitized.startsWith("feature/") ? sanitized : `feature/${sanitized}`;
   }
   return `feature/${sanitized}`;
+}
+
+export function normalizeWorktreeBranchPrefix(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return DEFAULT_WORKTREE_BRANCH_PREFIX;
+  }
+
+  const normalizedUpper = trimmed.toUpperCase();
+  if (/^[A-Z][A-Z0-9]*-\d+$/.test(normalizedUpper)) {
+    return normalizedUpper;
+  }
+
+  return sanitizeBranchFragment(trimmed);
 }
 
 const AUTO_FEATURE_BRANCH_FALLBACK = "feature/update";
@@ -85,13 +107,42 @@ export function deriveLocalBranchNameFromRemoteRef(branchName: string): string {
   return branchName.slice(firstSeparatorIndex + 1);
 }
 
-export function buildTemporaryWorktreeBranchName(): string {
+export function buildTemporaryWorktreeBranchName(prefix = DEFAULT_WORKTREE_BRANCH_PREFIX): string {
   const token = Effect.runSync(Random.nextUUIDv4).replace(/-/g, "").slice(0, 8).toLowerCase();
-  return `${WORKTREE_BRANCH_PREFIX}/${token}`;
+  return `${normalizeWorktreeBranchPrefix(prefix)}/${token}`;
 }
 
 export function isTemporaryWorktreeBranch(branch: string): boolean {
-  return TEMP_WORKTREE_BRANCH_PATTERN.test(branch.trim().toLowerCase());
+  return isTemporaryWorktreeBranchForPrefix(branch, DEFAULT_WORKTREE_BRANCH_PREFIX);
+}
+
+export function isTemporaryWorktreeBranchForPrefix(branch: string, prefix: string): boolean {
+  return buildTemporaryWorktreeBranchPattern(normalizeWorktreeBranchPrefix(prefix)).test(
+    branch.trim(),
+  );
+}
+
+export function deriveWorktreeBranchSuffix(branch: string): string | null {
+  const trimmed = branch.trim().replace(/^refs\/heads\//, "");
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === trimmed.length - 1) {
+    return null;
+  }
+  return trimmed.slice(slashIndex + 1);
+}
+
+export function buildSemanticWorktreeBranchName(prefix: string, suffix: string): string {
+  const normalizedPrefix = normalizeWorktreeBranchPrefix(prefix);
+  const normalizedSuffix = sanitizeBranchFragment(suffix);
+  return `${normalizedPrefix}/${normalizedSuffix.length > 0 ? normalizedSuffix : "update"}`;
+}
+
+export function isMainOrMasterBranchName(branch: string): boolean {
+  const normalized = branch
+    .trim()
+    .replace(/^refs\/heads\//, "")
+    .toLowerCase();
+  return normalized === "main" || normalized === "master";
 }
 
 /**

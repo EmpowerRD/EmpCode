@@ -110,6 +110,7 @@ export interface Thread {
   updatedAt?: string | undefined;
   latestTurn: OrchestrationLatestTurn | null;
   pendingSourceProposedPlan?: OrchestrationLatestTurn["sourceProposedPlan"];
+  jiraKey: string | null;
   branch: string | null;
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];
@@ -129,6 +130,7 @@ export interface ThreadShell {
   createdAt: string;
   archivedAt: string | null;
   updatedAt?: string | undefined;
+  jiraKey: string | null;
   branch: string | null;
   worktreePath: string | null;
 }
@@ -148,6 +150,7 @@ export interface SidebarThreadSummary {
   createdAt: string;
   archivedAt: string | null;
   updatedAt?: string | undefined;
+  jiraKey: string | null;
   latestTurn: OrchestrationLatestTurn | null;
   branch: string | null;
   worktreePath: string | null;

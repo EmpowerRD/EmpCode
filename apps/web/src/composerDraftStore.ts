@@ -1,6 +1,7 @@
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   type EnvironmentId,
+  JiraKey,
   ModelSelection,
   ProjectId,
   ProviderInteractionMode,
@@ -21,6 +22,7 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime";
 import * as Schema from "effect/Schema";
+import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import { DeepMutable } from "effect/Types";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
@@ -163,6 +165,7 @@ const PersistedDraftThreadState = Schema.Struct({
   createdAt: Schema.String,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  jiraKey: Schema.NullOr(JiraKey).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   envMode: DraftThreadEnvModeSchema,
@@ -223,6 +226,7 @@ export interface DraftSessionState {
   createdAt: string;
   runtimeMode: RuntimeMode;
   interactionMode: ProviderInteractionMode;
+  jiraKey: string | null;
   branch: string | null;
   worktreePath: string | null;
   envMode: DraftThreadEnvMode;
@@ -289,6 +293,7 @@ interface ComposerDraftStoreState {
       envMode?: DraftThreadEnvMode;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
+      jiraKey?: string | null;
     },
   ) => void;
   /** Creates or updates the draft session tracked for a concrete project ref. */
@@ -303,6 +308,7 @@ interface ComposerDraftStoreState {
       envMode?: DraftThreadEnvMode;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
+      jiraKey?: string | null;
     },
   ) => void;
   /** Updates mutable draft-session metadata without touching composer content. */
@@ -316,6 +322,7 @@ interface ComposerDraftStoreState {
       envMode?: DraftThreadEnvMode;
       runtimeMode?: RuntimeMode;
       interactionMode?: ProviderInteractionMode;
+      jiraKey?: string | null;
     },
   ) => void;
   clearProjectDraftThreadId: (projectRef: ScopedProjectRef) => void;
@@ -1034,6 +1041,7 @@ function createDraftThreadState(
     envMode?: DraftThreadEnvMode;
     runtimeMode?: RuntimeMode;
     interactionMode?: ProviderInteractionMode;
+    jiraKey?: string | null;
   },
 ): DraftThreadState {
   const projectChanged =
@@ -1061,6 +1069,7 @@ function createDraftThreadState(
     runtimeMode: options?.runtimeMode ?? existingThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE,
     interactionMode:
       options?.interactionMode ?? existingThread?.interactionMode ?? DEFAULT_INTERACTION_MODE,
+    jiraKey: options?.jiraKey ?? existingThread?.jiraKey ?? null,
     branch: nextBranch,
     worktreePath: nextWorktreePath,
     envMode:
@@ -1098,6 +1107,7 @@ function draftThreadsEqual(left: DraftThreadState | undefined, right: DraftThrea
     left.createdAt === right.createdAt &&
     left.runtimeMode === right.runtimeMode &&
     left.interactionMode === right.interactionMode &&
+    left.jiraKey === right.jiraKey &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath &&
     left.envMode === right.envMode &&
@@ -1239,6 +1249,11 @@ function normalizePersistedDraftThreads(
           candidateDraftThread.interactionMode === "default"
             ? candidateDraftThread.interactionMode
             : DEFAULT_INTERACTION_MODE,
+        jiraKey:
+          typeof candidateDraftThread.jiraKey === "string" &&
+          candidateDraftThread.jiraKey.length > 0
+            ? candidateDraftThread.jiraKey
+            : null,
         branch: typeof branch === "string" ? branch : null,
         worktreePath: normalizedWorktreePath,
         envMode: normalizeDraftThreadEnvMode(candidateDraftThread.envMode, normalizedWorktreePath),
@@ -1284,6 +1299,7 @@ function normalizePersistedDraftThreads(
           createdAt: new Date().toISOString(),
           runtimeMode: DEFAULT_RUNTIME_MODE,
           interactionMode: DEFAULT_INTERACTION_MODE,
+          jiraKey: null,
           branch: null,
           worktreePath: null,
           envMode: "local",
@@ -1793,6 +1809,7 @@ function toHydratedDraftThreadState(
     createdAt: persistedDraftThread.createdAt,
     runtimeMode: persistedDraftThread.runtimeMode,
     interactionMode: persistedDraftThread.interactionMode,
+    jiraKey: persistedDraftThread.jiraKey,
     branch: persistedDraftThread.branch,
     worktreePath: persistedDraftThread.worktreePath,
     envMode: persistedDraftThread.envMode,
@@ -1992,6 +2009,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                   : options.createdAt || existing.createdAt,
               runtimeMode: options.runtimeMode ?? existing.runtimeMode,
               interactionMode: options.interactionMode ?? existing.interactionMode,
+              jiraKey: options.jiraKey ?? existing.jiraKey ?? null,
               branch: nextBranch,
               worktreePath: nextWorktreePath,
               envMode:
@@ -2010,6 +2028,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
               nextDraftThread.createdAt === existing.createdAt &&
               nextDraftThread.runtimeMode === existing.runtimeMode &&
               nextDraftThread.interactionMode === existing.interactionMode &&
+              nextDraftThread.jiraKey === existing.jiraKey &&
               nextDraftThread.branch === existing.branch &&
               nextDraftThread.worktreePath === existing.worktreePath &&
               nextDraftThread.envMode === existing.envMode &&

@@ -243,6 +243,7 @@ function mapThread(thread: OrchestrationThread, environmentId: EnvironmentId): T
     updatedAt: thread.updatedAt,
     latestTurn: thread.latestTurn,
     pendingSourceProposedPlan: thread.latestTurn?.sourceProposedPlan,
+    jiraKey: thread.jiraKey ?? null,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
     turnDiffSummaries: thread.checkpoints.map(mapTurnDiffSummary),
@@ -272,6 +273,7 @@ function mapThreadShell(
     createdAt: thread.createdAt,
     archivedAt: thread.archivedAt,
     updatedAt: thread.updatedAt,
+    jiraKey: thread.jiraKey ?? null,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
   };
@@ -291,6 +293,7 @@ function mapThreadShell(
     archivedAt: thread.archivedAt,
     updatedAt: thread.updatedAt,
     latestTurn: thread.latestTurn,
+    jiraKey: thread.jiraKey ?? null,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
     latestUserMessageAt: thread.latestUserMessageAt,
@@ -320,6 +323,7 @@ function toThreadShell(thread: Thread): ThreadShell {
     createdAt: thread.createdAt,
     archivedAt: thread.archivedAt,
     updatedAt: thread.updatedAt,
+    jiraKey: thread.jiraKey ?? null,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
   };
@@ -392,6 +396,7 @@ function sidebarThreadSummariesEqual(
     left.archivedAt === right.archivedAt &&
     left.updatedAt === right.updatedAt &&
     latestTurnsEqual(left.latestTurn, right.latestTurn) &&
+    left.jiraKey === right.jiraKey &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath &&
     left.latestUserMessageAt === right.latestUserMessageAt &&
@@ -416,6 +421,7 @@ function threadShellsEqual(left: ThreadShell | undefined, right: ThreadShell): b
     left.createdAt === right.createdAt &&
     left.archivedAt === right.archivedAt &&
     left.updatedAt === right.updatedAt &&
+    left.jiraKey === right.jiraKey &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath
   );
@@ -1251,6 +1257,7 @@ function applyEnvironmentOrchestrationEvent(
           modelSelection: event.payload.modelSelection,
           runtimeMode: event.payload.runtimeMode,
           interactionMode: event.payload.interactionMode,
+          jiraKey: event.payload.jiraKey,
           branch: event.payload.branch,
           worktreePath: event.payload.worktreePath,
           latestTurn: null,
@@ -1293,6 +1300,7 @@ function applyEnvironmentOrchestrationEvent(
         ...(event.payload.modelSelection !== undefined
           ? { modelSelection: normalizeModelSelection(event.payload.modelSelection) }
           : {}),
+        ...(event.payload.jiraKey !== undefined ? { jiraKey: event.payload.jiraKey } : {}),
         ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
         ...(event.payload.worktreePath !== undefined
           ? { worktreePath: event.payload.worktreePath }

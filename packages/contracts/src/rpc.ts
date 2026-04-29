@@ -47,6 +47,7 @@ import {
   OrchestrationReplayEventsError,
   OrchestrationReplayEventsInput,
   OrchestrationRpcSchemas,
+  ThreadSetJiraKeyInput,
 } from "./orchestration.ts";
 import {
   ProjectSearchEntriesError,
@@ -292,6 +293,15 @@ export const WsOrchestrationDispatchCommandRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationSetThreadJiraKeyRpc = Rpc.make(
+  ORCHESTRATION_WS_METHODS.setThreadJiraKey,
+  {
+    payload: ThreadSetJiraKeyInput,
+    success: OrchestrationRpcSchemas.setThreadJiraKey.output,
+    error: OrchestrationDispatchCommandError,
+  },
+);
+
 export const WsOrchestrationGetTurnDiffRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getTurnDiff, {
   payload: OrchestrationGetTurnDiffInput,
   success: OrchestrationRpcSchemas.getTurnDiff.output,
@@ -388,6 +398,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeServerLifecycleRpc,
   WsSubscribeAuthAccessRpc,
   WsOrchestrationDispatchCommandRpc,
+  WsOrchestrationSetThreadJiraKeyRpc,
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,
   WsOrchestrationReplayEventsRpc,

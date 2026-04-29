@@ -710,6 +710,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 }
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
+  const { jiraKey = null, ...rest } = overrides;
   return {
     id: ThreadId.make("thread-1"),
     environmentId: localEnvironmentId,
@@ -731,11 +732,12 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     archivedAt: null,
     updatedAt: "2026-03-09T10:00:00.000Z",
     latestTurn: null,
+    jiraKey,
     branch: null,
     worktreePath: null,
     turnDiffSummaries: [],
     activities: [],
-    ...overrides,
+    ...rest,
   };
 }
 

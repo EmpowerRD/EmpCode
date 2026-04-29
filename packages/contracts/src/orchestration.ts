@@ -18,12 +18,16 @@ import {
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
+  setThreadJiraKey: "orchestration.setThreadJiraKey",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   replayEvents: "orchestration.replayEvents",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
 } as const;
+
+export const JiraKey = TrimmedNonEmptyString.check(Schema.isPattern(/^[A-Z][A-Z0-9]*-\d+$/));
+export type JiraKey = typeof JiraKey.Type;
 
 export const ProviderKind = Schema.Literals(["codex", "claudeAgent", "cursor", "opencode"]);
 export type ProviderKind = typeof ProviderKind.Type;
@@ -302,6 +306,7 @@ export const OrchestrationThread = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
@@ -348,6 +353,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
@@ -453,6 +459,7 @@ const ThreadCreateCommand = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
@@ -482,9 +489,17 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   threadId: ThreadId,
   title: Schema.optional(TrimmedNonEmptyString),
   modelSelection: Schema.optional(ModelSelection),
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
 });
+
+export const ThreadSetJiraKeyInput = Schema.Struct({
+  threadId: ThreadId,
+  jiraKey: Schema.NullOr(JiraKey),
+  renameBranch: Schema.Boolean,
+});
+export type ThreadSetJiraKeyInput = typeof ThreadSetJiraKeyInput.Type;
 
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
@@ -508,6 +523,7 @@ const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
@@ -796,6 +812,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
@@ -822,6 +839,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   threadId: ThreadId,
   title: Schema.optional(TrimmedNonEmptyString),
   modelSelection: Schema.optional(ModelSelection),
+  jiraKey: Schema.optional(Schema.NullOr(JiraKey)),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   worktreePath: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   updatedAt: IsoDateTime,
@@ -1168,6 +1186,10 @@ export type OrchestrationReplayEventsResult = typeof OrchestrationReplayEventsRe
 export const OrchestrationRpcSchemas = {
   dispatchCommand: {
     input: ClientOrchestrationCommand,
+    output: DispatchResult,
+  },
+  setThreadJiraKey: {
+    input: ThreadSetJiraKeyInput,
     output: DispatchResult,
   },
   getTurnDiff: {

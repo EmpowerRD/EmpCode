@@ -49,6 +49,7 @@ import type {
   OrchestrationGetTurnDiffResult,
   OrchestrationShellStreamItem,
   OrchestrationSubscribeThreadInput,
+  ThreadSetJiraKeyInput,
   OrchestrationThreadStreamItem,
 } from "./orchestration.ts";
 import type { EnvironmentId } from "./baseSchemas.ts";
@@ -271,6 +272,7 @@ export interface EnvironmentApi {
   };
   orchestration: {
     dispatchCommand: (command: ClientOrchestrationCommand) => Promise<{ sequence: number }>;
+    setThreadJiraKey: (input: ThreadSetJiraKeyInput) => Promise<{ sequence: number }>;
     getTurnDiff: (input: OrchestrationGetTurnDiffInput) => Promise<OrchestrationGetTurnDiffResult>;
     getFullThreadDiff: (
       input: OrchestrationGetFullThreadDiffInput,
