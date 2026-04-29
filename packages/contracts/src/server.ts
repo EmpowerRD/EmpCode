@@ -116,6 +116,12 @@ export const ServerObservability = Schema.Struct({
 });
 export type ServerObservability = typeof ServerObservability.Type;
 
+export const ServerJiraConfig = Schema.Struct({
+  domain: Schema.optional(TrimmedNonEmptyString),
+  projectKey: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerJiraConfig = typeof ServerJiraConfig.Type;
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,
@@ -126,6 +132,7 @@ export const ServerConfig = Schema.Struct({
   providers: ServerProviders,
   availableEditors: Schema.Array(EditorId),
   observability: ServerObservability,
+  jira: Schema.optional(ServerJiraConfig),
   settings: ServerSettings,
 });
 export type ServerConfig = typeof ServerConfig.Type;

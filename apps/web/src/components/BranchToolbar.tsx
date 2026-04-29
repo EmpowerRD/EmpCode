@@ -19,6 +19,7 @@ import { Separator } from "./ui/separator";
 interface BranchToolbarProps {
   environmentId: EnvironmentId;
   threadId: ThreadId;
+  jiraProjectKey?: string | null;
   draftId?: DraftId;
   onEnvModeChange: (mode: EnvMode) => void;
   effectiveEnvModeOverride?: EnvMode;
@@ -34,6 +35,7 @@ interface BranchToolbarProps {
 export const BranchToolbar = memo(function BranchToolbar({
   environmentId,
   threadId,
+  jiraProjectKey,
   draftId,
   onEnvModeChange,
   effectiveEnvModeOverride,
@@ -106,6 +108,7 @@ export const BranchToolbar = memo(function BranchToolbar({
           threadId={threadId}
           projectCwd={activeProject.cwd}
           effectiveEnvMode={effectiveEnvMode}
+          jiraProjectKey={jiraProjectKey ?? null}
           {...(draftId ? { draftId } : {})}
           {...(serverThread ? { serverThread } : {})}
           draftThread={draftThread}

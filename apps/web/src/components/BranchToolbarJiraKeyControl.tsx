@@ -6,8 +6,10 @@ import {
   deriveWorktreeBranchSuffix,
   isMainOrMasterBranchName,
   isTemporaryWorktreeBranchForPrefix,
+  normalizeJiraProjectKey,
   normalizeWorktreeBranchPrefix,
   sanitizeBranchFragment,
+  validateJiraKeyInput,
 } from "@t3tools/shared/git";
 import { useEffect, useMemo, useState } from "react";
 
@@ -27,21 +29,6 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { toastManager } from "./ui/toast";
-
-function validateJiraKey(raw: string): { normalized: string | null; error: string | null } {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    return { normalized: null, error: null };
-  }
-
-  const normalized = normalizeWorktreeBranchPrefix(trimmed);
-  return /^[A-Z][A-Z0-9]*-\d+$/.test(normalized)
-    ? { normalized, error: null }
-    : {
-        normalized: null,
-        error: "Use a Jira key like ABC-123.",
-      };
-}
 
 function buildRenameTarget(input: {
   branch: string;
@@ -71,6 +58,7 @@ export function BranchToolbarJiraKeyControl(props: {
   threadId: ThreadId;
   projectCwd: string;
   effectiveEnvMode: "local" | "worktree";
+  jiraProjectKey: string | null;
   draftId?: DraftId;
   serverThread?: Thread;
   draftThread: DraftThreadState | null;
@@ -81,6 +69,7 @@ export function BranchToolbarJiraKeyControl(props: {
     threadId,
     projectCwd,
     effectiveEnvMode,
+    jiraProjectKey,
     draftId,
     serverThread,
     draftThread,
@@ -122,7 +111,7 @@ export function BranchToolbarJiraKeyControl(props: {
     }
   }, [currentJiraKey, dialogOpen]);
 
-  const validation = validateJiraKey(draftValue);
+  const validation = validateJiraKeyInput(draftValue, jiraProjectKey);
   const normalizedJiraKey = validation.normalized;
   const isBlockedByGuardrail = normalizedJiraKey !== null && !jiraKeyAllowed;
   const canSave =
@@ -258,7 +247,7 @@ export function BranchToolbarJiraKeyControl(props: {
             <div className="space-y-2">
               <Input
                 autoFocus
-                placeholder="ABC-123"
+                placeholder={`${normalizeJiraProjectKey(jiraProjectKey) ?? "ABC"}-123`}
                 value={draftValue}
                 onChange={(event) => setDraftValue(event.currentTarget.value)}
               />

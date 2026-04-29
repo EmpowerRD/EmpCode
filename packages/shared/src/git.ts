@@ -145,6 +145,65 @@ export function isMainOrMasterBranchName(branch: string): boolean {
   return normalized === "main" || normalized === "master";
 }
 
+export function normalizeJiraDomain(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/g, "")
+    .replace(/\.atlassian\.net$/i, "")
+    .toLowerCase();
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function normalizeJiraProjectKey(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim().toUpperCase();
+  if (!trimmed || !/^[A-Z][A-Z0-9]*$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
+export function validateJiraKeyInput(
+  raw: string,
+  projectKey?: string | null,
+): { normalized: string | null; error: string | null } {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { normalized: null, error: null };
+  }
+
+  const normalized = trimmed.toUpperCase();
+  const normalizedProjectKey = normalizeJiraProjectKey(projectKey);
+  const pattern = normalizedProjectKey
+    ? new RegExp(`^${escapeRegExp(normalizedProjectKey)}-\\d+$`)
+    : /^[A-Z][A-Z0-9]*-\d+$/;
+  if (!pattern.test(normalized)) {
+    return {
+      normalized: null,
+      error: normalizedProjectKey
+        ? `Use a Jira key like ${normalizedProjectKey}-123.`
+        : "Use a Jira key like ABC-123.",
+    };
+  }
+
+  return { normalized, error: null };
+}
+
+export function buildJiraTicketUrl(domain: string, jiraKey: string): string {
+  const normalizedDomain = normalizeJiraDomain(domain);
+  return `https://${normalizedDomain}.atlassian.net/browse/${jiraKey}`;
+}
+
+export function buildJiraCreateTicketUrl(domain: string): string {
+  const normalizedDomain = normalizeJiraDomain(domain);
+  return `https://${normalizedDomain}.atlassian.net/secure/CreateIssue.jspa`;
+}
+
 /**
  * Normalize a git remote URL into a stable comparison key.
  */

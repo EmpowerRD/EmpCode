@@ -33,8 +33,11 @@ import {
   deriveWorktreeBranchSuffix,
   isMainOrMasterBranchName,
   isTemporaryWorktreeBranchForPrefix,
+  normalizeJiraDomain,
+  normalizeJiraProjectKey,
   normalizeWorktreeBranchPrefix,
   sanitizeBranchFragment,
+  validateJiraKeyInput,
 } from "@t3tools/shared/git";
 
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery.ts";
@@ -526,6 +529,8 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
         const settings = yield* serverSettings.getSettings;
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
+        const jiraDomain = normalizeJiraDomain(process.env.JIRA_DOMAIN);
+        const jiraProjectKey = normalizeJiraProjectKey(process.env.JIRA_PROJECT_KEY);
 
         return {
           environment,
@@ -546,6 +551,14 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               : {}),
             otlpMetricsEnabled: config.otlpMetricsUrl !== undefined,
           },
+          ...(jiraDomain !== null || jiraProjectKey !== null
+            ? {
+                jira: {
+                  ...(jiraDomain ? { domain: jiraDomain } : {}),
+                  ...(jiraProjectKey ? { projectKey: jiraProjectKey } : {}),
+                },
+              }
+            : {}),
           settings,
         };
       });
@@ -602,7 +615,21 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
         readonly isWorktreeContext: boolean;
       }) =>
         Effect.gen(function* () {
-          if (input.jiraKey == null || input.isWorktreeContext) {
+          if (input.jiraKey == null) {
+            return;
+          }
+
+          const jiraProjectKey = normalizeJiraProjectKey(process.env.JIRA_PROJECT_KEY);
+          const validation = validateJiraKeyInput(input.jiraKey, jiraProjectKey);
+          if (validation.error) {
+            return yield* Effect.fail(
+              new OrchestrationDispatchCommandError({
+                message: validation.error,
+              }),
+            );
+          }
+
+          if (input.isWorktreeContext) {
             return;
           }
 

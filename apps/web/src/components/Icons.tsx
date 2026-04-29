@@ -15,6 +15,56 @@ export const GitHubIcon: Icon = (props) => (
   </svg>
 );
 
+export const JiraIcon: Icon = (props) => {
+  const id = useId();
+  const middleGradientId = `${id}-jira-middle`;
+  const backGradientId = `${id}-jira-back`;
+
+  return (
+    <svg {...props} viewBox="0 0 24 24" fill="none">
+      {/* Front kite (smallest, lower-left) — solid Jira blue */}
+      <path
+        d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z"
+        fill="#2684FF"
+      />
+      {/* Middle kite */}
+      <path
+        d="M17.317 5.736H5.736a5.218 5.218 0 0 0 5.232 5.215h2.13v2.058a5.215 5.215 0 0 0 5.214 5.214V6.741a1.005 1.005 0 0 0-.995-1.005z"
+        fill={`url(#${middleGradientId})`}
+      />
+      {/* Back kite (largest, upper-right) */}
+      <path
+        d="M23.063 0H11.483a5.215 5.215 0 0 0 5.215 5.214h2.129v2.058A5.218 5.218 0 0 0 24.04 12.475V1.005A1.005 1.005 0 0 0 23.063 0z"
+        fill={`url(#${backGradientId})`}
+      />
+      <defs>
+        <linearGradient
+          id={middleGradientId}
+          x1="18.295"
+          y1="5.736"
+          x2="11.97"
+          y2="12.04"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset=".176" stopColor="#0052CC" />
+          <stop offset="1" stopColor="#2684FF" />
+        </linearGradient>
+        <linearGradient
+          id={backGradientId}
+          x1="24.04"
+          y1="0"
+          x2="17.71"
+          y2="6.32"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop offset=".176" stopColor="#0052CC" />
+          <stop offset="1" stopColor="#2684FF" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+};
+
 export const CursorIcon: Icon = ({ className, ...props }) => (
   <svg
     {...props}

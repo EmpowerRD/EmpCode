@@ -3258,6 +3258,8 @@ export default function ChatView(props: ChatViewProps) {
           isGitRepo={isGitRepo}
           openInCwd={gitCwd}
           activeProjectScripts={activeProject?.scripts}
+          jiraDomain={serverConfig?.jira?.domain ?? null}
+          jiraKey={activeThread.jiraKey}
           preferredScriptId={
             activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
           }
@@ -3407,6 +3409,7 @@ export default function ChatView(props: ChatViewProps) {
             <BranchToolbar
               environmentId={activeThread.environmentId}
               threadId={activeThread.id}
+              jiraProjectKey={serverConfig?.jira?.projectKey ?? null}
               {...(routeKind === "draft" && draftId ? { draftId } : {})}
               onEnvModeChange={onEnvModeChange}
               {...(canOverrideServerThreadEnvMode ? { effectiveEnvModeOverride: envMode } : {})}

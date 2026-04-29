@@ -1,3 +1,54 @@
+# EmpCode (EmpowerRD fork of T3 Code)
+
+This is the EmpowerRD fork of [T3 Code](https://github.com/pingdotgg/t3code) with internal customizations (Jira integration, branch naming, etc.). The notes in this section are for engineers on the EmpowerRD team — upstream T3 Code documentation continues below.
+
+## First-time machine setup
+
+You only need to do this once per machine. These are the runtime versions we've verified work end-to-end.
+
+```bash
+# Install Bun (the package manager) at the version pinned in package.json.
+brew install bun@1.3.11
+bun --version  # should print 1.3.11
+
+# Install Node 24 via asdf (matches the engines field in package.json).
+asdf plugin add nodejs
+asdf install nodejs 24.10.0
+node -v        # should print v24.10.0
+```
+
+> If you prefer `mise` over `asdf`, `mise install` from the repo root will pick up the pinned versions instead.
+
+## Quick start for EmpowerRD engineers
+
+After the first-time machine setup above:
+
+```bash
+# 1. Install dependencies. Bun is the package manager for this repo.
+bun install .
+
+# 2. Configure local environment variables.
+cp .env.example .env
+# Then edit `.env` and fill in any values you want (e.g. JIRA_DOMAIN=empowerrd).
+# Both `.env` and `.env.local` are gitignored, so your values stay local.
+
+# 3. Start the dev server (web + server in one process).
+bun run dev
+```
+
+The server auto-loads `.env` at startup via `--env-file-if-exists`. If you change a value in `.env`, restart `bun run dev` and refresh the web app to pick it up.
+
+### Useful environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `JIRA_DOMAIN` | Subdomain of your Atlassian instance (e.g. `empowerrd` for `empowerrd.atlassian.net`). When set, shows an "Open Ticket" / "Create Ticket" button in the chat header. |
+| `JIRA_PROJECT_KEY` | Restricts the Jira key input on threads to a specific project prefix (e.g. `PLAT` requires keys like `PLAT-123`). Optional. |
+
+See `.env.example` for the full list and inline comments.
+
+---
+
 # T3 Code
 
 T3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).

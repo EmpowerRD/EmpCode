@@ -6,6 +6,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime";
+import { buildJiraCreateTicketUrl, buildJiraTicketUrl } from "@t3tools/shared/git";
 import { memo } from "react";
 import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
@@ -16,6 +17,8 @@ import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScr
 import { Toggle } from "../ui/toggle";
 import { SidebarTrigger } from "../ui/sidebar";
 import { OpenInPicker } from "./OpenInPicker";
+import { JiraIcon } from "../Icons";
+import { Button } from "../ui/button";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -26,6 +29,8 @@ interface ChatHeaderProps {
   isGitRepo: boolean;
   openInCwd: string | null;
   activeProjectScripts: ProjectScript[] | undefined;
+  jiraDomain: string | null;
+  jiraKey: string | null;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
@@ -52,6 +57,8 @@ export const ChatHeader = memo(function ChatHeader({
   isGitRepo,
   openInCwd,
   activeProjectScripts,
+  jiraDomain,
+  jiraKey,
   preferredScriptId,
   keybindings,
   availableEditors,
@@ -68,6 +75,12 @@ export const ChatHeader = memo(function ChatHeader({
   onToggleTerminal,
   onToggleDiff,
 }: ChatHeaderProps) {
+  const jiraHref = jiraDomain
+    ? jiraKey
+      ? buildJiraTicketUrl(jiraDomain, jiraKey)
+      : buildJiraCreateTicketUrl(jiraDomain)
+    : null;
+
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
@@ -107,6 +120,23 @@ export const ChatHeader = memo(function ChatHeader({
             availableEditors={availableEditors}
             openInCwd={openInCwd}
           />
+        )}
+        {jiraHref && (
+          <Button
+            size="xs"
+            variant="outline"
+            render={
+              <a
+                href={jiraHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Jira ticket"
+              />
+            }
+          >
+            <JiraIcon aria-hidden="true" className="size-3.5" />
+            {jiraKey ? "Open Ticket" : "Create Ticket"}
+          </Button>
         )}
         {activeProjectName && (
           <GitActionsControl

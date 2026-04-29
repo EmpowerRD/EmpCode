@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyGitStatusStreamEvent,
+  buildJiraCreateTicketUrl,
+  buildJiraTicketUrl,
   buildSemanticWorktreeBranchName,
   buildTemporaryWorktreeBranchName,
   DEFAULT_WORKTREE_BRANCH_PREFIX,
@@ -10,9 +12,12 @@ import {
   isMainOrMasterBranchName,
   isTemporaryWorktreeBranch,
   isTemporaryWorktreeBranchForPrefix,
+  normalizeJiraDomain,
+  normalizeJiraProjectKey,
   normalizeWorktreeBranchPrefix,
   normalizeGitRemoteUrl,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
+  validateJiraKeyInput,
   WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
 
@@ -105,6 +110,32 @@ describe("worktree branch helpers", () => {
     expect(isMainOrMasterBranchName("master")).toBe(true);
     expect(isMainOrMasterBranchName("refs/heads/main")).toBe(true);
     expect(isMainOrMasterBranchName("feature/main")).toBe(false);
+  });
+
+  it("validates jira keys against an optional configured project key", () => {
+    expect(validateJiraKeyInput("abc-123")).toEqual({ normalized: "ABC-123", error: null });
+    expect(validateJiraKeyInput("some-123", "SOME")).toEqual({
+      normalized: "SOME-123",
+      error: null,
+    });
+    expect(validateJiraKeyInput("other-123", "SOME")).toEqual({
+      normalized: null,
+      error: "Use a Jira key like SOME-123.",
+    });
+  });
+
+  it("normalizes jira domains and project keys", () => {
+    expect(normalizeJiraDomain("https://Example.atlassian.net/")).toBe("example");
+    expect(normalizeJiraProjectKey(" some ")).toBe("SOME");
+  });
+
+  it("builds jira issue and create-ticket urls", () => {
+    expect(buildJiraTicketUrl("example", "SOME-123")).toBe(
+      "https://example.atlassian.net/browse/SOME-123",
+    );
+    expect(buildJiraCreateTicketUrl("example")).toBe(
+      "https://example.atlassian.net/secure/CreateIssue.jspa",
+    );
   });
 });
 
