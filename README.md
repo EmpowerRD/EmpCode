@@ -40,10 +40,10 @@ The server auto-loads `.env` at startup via `--env-file-if-exists`. If you chang
 
 ### Useful environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `JIRA_DOMAIN` | Subdomain of your Atlassian instance (e.g. `empowerrd` for `empowerrd.atlassian.net`). When set, shows an "Open Ticket" / "Create Ticket" button in the chat header. |
-| `JIRA_PROJECT_KEY` | Restricts the Jira key input on threads to a specific project prefix (e.g. `PLAT` requires keys like `PLAT-123`). Optional. |
+| Variable           | Purpose                                                                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JIRA_DOMAIN`      | Subdomain of your Atlassian instance (e.g. `google` for `google.atlassian.net`). When set, shows an "Open Ticket" / "Create Ticket" button in the chat header. |
+| `JIRA_PROJECT_KEY` | Restricts the Jira key input on threads to a specific project prefix (e.g. `GOOG` requires keys like `GOOG-123`). Optional.                                    |
 
 See `.env.example` for the full list and inline comments.
 

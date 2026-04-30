@@ -143,8 +143,7 @@ export function isTemporaryWorktreeBranchForAnyPrefix(branch: string): boolean {
     return false;
   }
   return (
-    prefix.toLowerCase() === DEFAULT_WORKTREE_BRANCH_PREFIX ||
-    JIRA_KEY_PREFIX_PATTERN.test(prefix)
+    prefix.toLowerCase() === DEFAULT_WORKTREE_BRANCH_PREFIX || JIRA_KEY_PREFIX_PATTERN.test(prefix)
   );
 }
 

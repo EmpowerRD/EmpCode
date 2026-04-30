@@ -4190,114 +4190,110 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect(
-    "setThreadJiraKey does not dispatch when the git rename fails",
-    () =>
-      Effect.gen(function* () {
-        const dispatchedCommands: Array<OrchestrationCommand> = [];
-        const renameBranch = vi.fn(
-          (
-            _: Parameters<GitCoreShape["renameBranch"]>[0],
-          ): ReturnType<GitCoreShape["renameBranch"]> =>
-            Effect.fail(
-              new GitCommandError({
-                operation: "GitCore.renameBranch",
-                cwd: "/tmp/wt",
-                command: "git branch -m",
-                detail: "boom",
-              }),
-            ),
-        );
+  it.effect("setThreadJiraKey does not dispatch when the git rename fails", () =>
+    Effect.gen(function* () {
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      const renameBranch = vi.fn(
+        (
+          _: Parameters<GitCoreShape["renameBranch"]>[0],
+        ): ReturnType<GitCoreShape["renameBranch"]> =>
+          Effect.fail(
+            new GitCommandError({
+              operation: "GitCore.renameBranch",
+              cwd: "/tmp/wt",
+              command: "git branch -m",
+              detail: "boom",
+            }),
+          ),
+      );
 
-        yield* buildAppUnderTest({
-          layers: {
-            gitCore: { renameBranch },
-            orchestrationEngine: {
-              dispatch: (command) =>
-                Effect.sync(() => {
-                  dispatchedCommands.push(command);
-                  return { sequence: dispatchedCommands.length };
-                }),
-              readEvents: () => Stream.empty,
-            },
-            projectionSnapshotQuery: {
-              getThreadShellById: () =>
-                Effect.succeed(
-                  Option.some(
-                    makeDefaultOrchestrationThreadShell({
-                      title: "Anything",
-                      branch: "feature/foo",
-                      worktreePath: "/tmp/wt",
-                    }),
-                  ),
-                ),
-              getProjectShellById: () =>
-                Effect.succeed(
-                  Option.some({
-                    id: defaultProjectId,
-                    title: "Default Project",
-                    workspaceRoot: "/tmp/project",
-                    defaultModelSelection,
-                    scripts: [],
-                    createdAt: new Date(0).toISOString(),
-                    updatedAt: new Date(0).toISOString(),
+      yield* buildAppUnderTest({
+        layers: {
+          gitCore: { renameBranch },
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+          projectionSnapshotQuery: {
+            getThreadShellById: () =>
+              Effect.succeed(
+                Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    title: "Anything",
+                    branch: "feature/foo",
+                    worktreePath: "/tmp/wt",
                   }),
                 ),
-            },
+              ),
+            getProjectShellById: () =>
+              Effect.succeed(
+                Option.some({
+                  id: defaultProjectId,
+                  title: "Default Project",
+                  workspaceRoot: "/tmp/project",
+                  defaultModelSelection,
+                  scripts: [],
+                  createdAt: new Date(0).toISOString(),
+                  updatedAt: new Date(0).toISOString(),
+                }),
+              ),
           },
-        });
+        },
+      });
 
-        const wsUrl = yield* getWsServerUrl("/ws");
-        const result = yield* Effect.scoped(
-          withWsRpcClient(wsUrl, (client) =>
-            client[ORCHESTRATION_WS_METHODS.setThreadJiraKey]({
-              threadId: defaultThreadId,
-              jiraKey: "JIRA-123",
-              renameBranch: true,
-            }),
-          ).pipe(Effect.result),
-        );
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.setThreadJiraKey]({
+            threadId: defaultThreadId,
+            jiraKey: "JIRA-123",
+            renameBranch: true,
+          }),
+        ).pipe(Effect.result),
+      );
 
-        assertTrue(result._tag === "Failure");
-        assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
-        // No meta-update event should have been emitted when the rename fails.
-        assert.equal(dispatchedCommands.length, 0);
-      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+      assertTrue(result._tag === "Failure");
+      assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
+      // No meta-update event should have been emitted when the rename fails.
+      assert.equal(dispatchedCommands.length, 0);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect(
-    "serverGetConfig exposes JIRA_DOMAIN and JIRA_PROJECT_KEY when env vars are set",
-    () =>
-      Effect.gen(function* () {
-        const previousDomain = process.env.JIRA_DOMAIN;
-        const previousProjectKey = process.env.JIRA_PROJECT_KEY;
-        process.env.JIRA_DOMAIN = "diagnostic";
-        process.env.JIRA_PROJECT_KEY = "PLAT";
-        try {
-          yield* buildAppUnderTest();
+  it.effect("serverGetConfig exposes JIRA_DOMAIN and JIRA_PROJECT_KEY when env vars are set", () =>
+    Effect.gen(function* () {
+      const previousDomain = process.env.JIRA_DOMAIN;
+      const previousProjectKey = process.env.JIRA_PROJECT_KEY;
+      process.env.JIRA_DOMAIN = "diagnostic";
+      process.env.JIRA_PROJECT_KEY = "PLAT";
+      try {
+        yield* buildAppUnderTest();
 
-          const wsUrl = yield* getWsServerUrl("/ws");
-          const response = yield* Effect.scoped(
-            withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverGetConfig]({})),
-          );
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const response = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverGetConfig]({})),
+        );
 
-          assert.deepEqual(response.jira, {
-            domain: "diagnostic",
-            projectKey: "PLAT",
-          });
-        } finally {
-          if (previousDomain === undefined) {
-            delete process.env.JIRA_DOMAIN;
-          } else {
-            process.env.JIRA_DOMAIN = previousDomain;
-          }
-          if (previousProjectKey === undefined) {
-            delete process.env.JIRA_PROJECT_KEY;
-          } else {
-            process.env.JIRA_PROJECT_KEY = previousProjectKey;
-          }
+        assert.deepEqual(response.jira, {
+          domain: "diagnostic",
+          projectKey: "PLAT",
+        });
+      } finally {
+        if (previousDomain === undefined) {
+          delete process.env.JIRA_DOMAIN;
+        } else {
+          process.env.JIRA_DOMAIN = previousDomain;
         }
-      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+        if (previousProjectKey === undefined) {
+          delete process.env.JIRA_PROJECT_KEY;
+        } else {
+          process.env.JIRA_PROJECT_KEY = previousProjectKey;
+        }
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("serverGetConfig omits jira block when env vars are unset", () =>
@@ -4326,37 +4322,35 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect(
-    "subscribeServerConfig snapshot includes the jira block when env vars are set",
-    () =>
-      Effect.gen(function* () {
-        const previousDomain = process.env.JIRA_DOMAIN;
-        process.env.JIRA_DOMAIN = "diagnostic";
-        try {
-          yield* buildAppUnderTest();
+  it.effect("subscribeServerConfig snapshot includes the jira block when env vars are set", () =>
+    Effect.gen(function* () {
+      const previousDomain = process.env.JIRA_DOMAIN;
+      process.env.JIRA_DOMAIN = "diagnostic";
+      try {
+        yield* buildAppUnderTest();
 
-          const wsUrl = yield* getWsServerUrl("/ws");
-          const events = yield* Effect.scoped(
-            withWsRpcClient(wsUrl, (client) =>
-              client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(1), Stream.runCollect),
-            ),
-          );
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const events = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[WS_METHODS.subscribeServerConfig]({}).pipe(Stream.take(1), Stream.runCollect),
+          ),
+        );
 
-          const [firstEvent] = Array.from(events);
-          assertTrue(firstEvent !== undefined);
-          assertTrue(firstEvent?.type === "snapshot");
-          if (firstEvent?.type === "snapshot") {
-            assert.deepEqual(firstEvent.config.jira, {
-              domain: "diagnostic",
-            });
-          }
-        } finally {
-          if (previousDomain === undefined) {
-            delete process.env.JIRA_DOMAIN;
-          } else {
-            process.env.JIRA_DOMAIN = previousDomain;
-          }
+        const [firstEvent] = Array.from(events);
+        assertTrue(firstEvent !== undefined);
+        assertTrue(firstEvent?.type === "snapshot");
+        if (firstEvent?.type === "snapshot") {
+          assert.deepEqual(firstEvent.config.jira, {
+            domain: "diagnostic",
+          });
         }
-      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+      } finally {
+        if (previousDomain === undefined) {
+          delete process.env.JIRA_DOMAIN;
+        } else {
+          process.env.JIRA_DOMAIN = previousDomain;
+        }
+      }
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 });

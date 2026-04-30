@@ -95,21 +95,19 @@ const upstreamMigrationEntries = [
 ] as const;
 
 // Fork-specific migrations — append new fork migrations here (10001+).
-const forkMigrationEntries = [
-  [10001, "ProjectionThreadsJiraKey", Migration10001],
-] as const;
+const forkMigrationEntries = [[10001, "ProjectionThreadsJiraKey", Migration10001]] as const;
 
-export const migrationEntries = [
-  ...upstreamMigrationEntries,
-  ...forkMigrationEntries,
-] as const;
+export const migrationEntries = [...upstreamMigrationEntries, ...forkMigrationEntries] as const;
+
+const formatMigrationLoaderKey = (id: number, name: string) =>
+  `${id.toString().padStart(5, "0")}_${name}`;
 
 export const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(
     Object.fromEntries(
       migrationEntries
         .filter(([id]) => throughId === undefined || id <= throughId)
-        .map(([id, name, migration]) => [`${id}_${name}`, migration]),
+        .map(([id, name, migration]) => [formatMigrationLoaderKey(id, name), migration]),
     ),
   );
 

@@ -1,6 +1,6 @@
 import "../index.css";
 
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
@@ -8,17 +8,14 @@ const ENVIRONMENT_ID = EnvironmentId.make("environment-local");
 const THREAD_ID = ThreadId.make("thread-jira-key-test");
 const PROJECT_CWD = "/repo/project";
 
-const {
-  setThreadJiraKeySpy,
-  setDraftThreadContextSpy,
-  toastAddSpy,
-  gitStatusRef,
-} = vi.hoisted(() => ({
-  setThreadJiraKeySpy: vi.fn(async () => ({ sequence: 1 })),
-  setDraftThreadContextSpy: vi.fn(),
-  toastAddSpy: vi.fn(() => "toast-1"),
-  gitStatusRef: { current: { branch: "feature/something" as string | null } },
-}));
+const { setThreadJiraKeySpy, setDraftThreadContextSpy, toastAddSpy, gitStatusRef } = vi.hoisted(
+  () => ({
+    setThreadJiraKeySpy: vi.fn(async () => ({ sequence: 1 })),
+    setDraftThreadContextSpy: vi.fn(),
+    toastAddSpy: vi.fn(() => "toast-1"),
+    gitStatusRef: { current: { branch: "feature/something" as string | null } },
+  }),
+);
 
 vi.mock("~/environmentApi", () => ({
   readEnvironmentApi: vi.fn(() => ({
@@ -76,7 +73,7 @@ function makeServerThread(overrides: Partial<Thread> = {}): Thread {
     codexThreadId: null,
     projectId: "project-1" as never,
     title: "Fix login flow",
-    modelSelection: { provider: "codex", model: "gpt-5" },
+    modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
     runtimeMode: "full-access",
     interactionMode: "default",
     session: null,
