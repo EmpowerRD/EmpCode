@@ -6,13 +6,19 @@
  *
  * Migrations run automatically when the MigrationLayer is provided,
  * ensuring the database schema is always up-to-date before the application starts.
+ *
+ * ── Fork migration convention ──
+ * Upstream (origin) migrations use IDs 0001–9999.
+ * Fork-specific migrations use IDs 10001+ to avoid numbering collisions
+ * on upstream merges. Always append new fork migrations to the
+ * `forkMigrationEntries` array below — never insert into the upstream block.
  */
 
 import * as Migrator from "effect/unstable/sql/Migrator";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 
-// Import all migrations statically
+// ── Upstream migrations (synced from origin — keep in upstream order) ──
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
 import Migration0002 from "./Migrations/002_OrchestrationCommandReceipts.ts";
 import Migration0003 from "./Migrations/003_CheckpointDiffBlobs.ts";
@@ -39,7 +45,9 @@ import Migration0023 from "./Migrations/023_ProjectionThreadShellSummary.ts";
 import Migration0024 from "./Migrations/024_BackfillProjectionThreadShellSummary.ts";
 import Migration0025 from "./Migrations/025_CleanupInvalidProjectionPendingApprovals.ts";
 import Migration0026 from "./Migrations/026_CanonicalizeModelSelectionOptions.ts";
-import Migration0027 from "./Migrations/027_ProjectionThreadsJiraKey.ts";
+
+// ── Fork-specific migrations (10001+) ──
+import Migration10001 from "./Migrations/10001_ProjectionThreadsJiraKey.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -51,7 +59,9 @@ import Migration0027 from "./Migrations/027_ProjectionThreadsJiraKey.ts";
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
-export const migrationEntries = [
+
+// Upstream migrations — on merge, take upstream's additions here.
+const upstreamMigrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -78,7 +88,16 @@ export const migrationEntries = [
   [24, "BackfillProjectionThreadShellSummary", Migration0024],
   [25, "CleanupInvalidProjectionPendingApprovals", Migration0025],
   [26, "CanonicalizeModelSelectionOptions", Migration0026],
-  [27, "ProjectionThreadsJiraKey", Migration0027],
+] as const;
+
+// Fork-specific migrations — append new fork migrations here (10001+).
+const forkMigrationEntries = [
+  [10001, "ProjectionThreadsJiraKey", Migration10001],
+] as const;
+
+export const migrationEntries = [
+  ...upstreamMigrationEntries,
+  ...forkMigrationEntries,
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>
