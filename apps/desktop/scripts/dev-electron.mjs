@@ -1,9 +1,18 @@
 import { spawn, spawnSync } from "node:child_process";
-import { watch } from "node:fs";
+import { existsSync, watch } from "node:fs";
 import { join } from "node:path";
 
 import { desktopDir, resolveElectronPath } from "./electron-launcher.mjs";
 import { waitForResources } from "./wait-for-resources.mjs";
+
+// Mirror the per-app server `dev` script, which auto-loads the monorepo-root
+// `.env` via `--env-file-if-exists`. Without this, the desktop dev build
+// inherits only the parent shell's env, so values like `JIRA_DOMAIN` and
+// `JIRA_PROJECT_KEY` don't reach the spawned backend.
+const monorepoEnvFile = join(desktopDir, "..", "..", ".env");
+if (existsSync(monorepoEnvFile)) {
+  process.loadEnvFile(monorepoEnvFile);
+}
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL?.trim();
 if (!devServerUrl) {
