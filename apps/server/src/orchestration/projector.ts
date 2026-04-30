@@ -257,7 +257,7 @@ export function projectEvent(
             modelSelection: payload.modelSelection,
             runtimeMode: payload.runtimeMode,
             interactionMode: payload.interactionMode,
-            jiraKey: payload.jiraKey,
+            jiraKey: payload.jiraKey ?? null,
             branch: payload.branch,
             worktreePath: payload.worktreePath,
             latestTurn: null,

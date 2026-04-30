@@ -5,7 +5,7 @@
  */
 import { Schema } from "effect";
 
-import { TextGenerationError } from "@t3tools/contracts";
+import { DEFAULT_THREAD_TITLE, TextGenerationError } from "@t3tools/contracts";
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -112,7 +112,7 @@ export function sanitizeThreadTitle(raw: string): string {
     .replace(/\s+/g, " ");
 
   if (!normalized || normalized.trim().length === 0) {
-    return "New thread";
+    return DEFAULT_THREAD_TITLE;
   }
 
   if (normalized.length <= 50) {

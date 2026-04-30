@@ -5,12 +5,14 @@ import {
   applyGitStatusStreamEvent,
   buildJiraCreateTicketUrl,
   buildJiraTicketUrl,
+  buildRenamedJiraBranchName,
   buildSemanticWorktreeBranchName,
   buildTemporaryWorktreeBranchName,
   DEFAULT_WORKTREE_BRANCH_PREFIX,
   deriveWorktreeBranchSuffix,
   isMainOrMasterBranchName,
   isTemporaryWorktreeBranch,
+  isTemporaryWorktreeBranchForAnyPrefix,
   isTemporaryWorktreeBranchForPrefix,
   normalizeJiraDomain,
   normalizeJiraProjectKey,
@@ -18,7 +20,6 @@ import {
   normalizeGitRemoteUrl,
   parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
   validateJiraKeyInput,
-  WORKTREE_BRANCH_PREFIX,
 } from "./git.ts";
 
 describe("normalizeGitRemoteUrl", () => {
@@ -70,15 +71,94 @@ describe("isTemporaryWorktreeBranch", () => {
   });
 
   it("matches generated temporary worktree branches", () => {
-    expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/deadbeef`)).toBe(true);
-    expect(isTemporaryWorktreeBranch(` ${WORKTREE_BRANCH_PREFIX}/deadbeef `)).toBe(true);
-    expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/DEADBEEF`)).toBe(true);
+    expect(isTemporaryWorktreeBranch(`${DEFAULT_WORKTREE_BRANCH_PREFIX}/deadbeef`)).toBe(true);
+    expect(isTemporaryWorktreeBranch(` ${DEFAULT_WORKTREE_BRANCH_PREFIX}/deadbeef `)).toBe(true);
+    expect(isTemporaryWorktreeBranch(`${DEFAULT_WORKTREE_BRANCH_PREFIX}/DEADBEEF`)).toBe(true);
   });
 
   it("rejects non-temporary branch names", () => {
-    expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/feature/demo`)).toBe(false);
+    expect(isTemporaryWorktreeBranch(`${DEFAULT_WORKTREE_BRANCH_PREFIX}/feature/demo`)).toBe(false);
     expect(isTemporaryWorktreeBranch("main")).toBe(false);
-    expect(isTemporaryWorktreeBranch(`${WORKTREE_BRANCH_PREFIX}/deadbeef-extra`)).toBe(false);
+    expect(isTemporaryWorktreeBranch(`${DEFAULT_WORKTREE_BRANCH_PREFIX}/deadbeef-extra`)).toBe(
+      false,
+    );
+  });
+});
+
+describe("isTemporaryWorktreeBranchForAnyPrefix", () => {
+  it("matches default-prefix temp branches", () => {
+    expect(isTemporaryWorktreeBranchForAnyPrefix("empcode/deadbeef")).toBe(true);
+    expect(isTemporaryWorktreeBranchForAnyPrefix(" empcode/DEADBEEF ")).toBe(true);
+  });
+
+  it("matches jira-prefixed temp branches", () => {
+    expect(isTemporaryWorktreeBranchForAnyPrefix("JIRA-123/deadbeef")).toBe(true);
+    expect(isTemporaryWorktreeBranchForAnyPrefix("ABC-1/abcd1234")).toBe(true);
+  });
+
+  it("rejects semantic branches even when the suffix is hex-shaped", () => {
+    expect(isTemporaryWorktreeBranchForAnyPrefix("JIRA-123/feature-name")).toBe(false);
+    // 8 hex chars but the prefix is neither default nor a jira key.
+    expect(isTemporaryWorktreeBranchForAnyPrefix("feature/abcdef12")).toBe(false);
+  });
+
+  it("rejects malformed branches", () => {
+    expect(isTemporaryWorktreeBranchForAnyPrefix("main")).toBe(false);
+    expect(isTemporaryWorktreeBranchForAnyPrefix("empcode/")).toBe(false);
+    expect(isTemporaryWorktreeBranchForAnyPrefix("/deadbeef")).toBe(false);
+    expect(isTemporaryWorktreeBranchForAnyPrefix("empcode/deadbeefxx")).toBe(false);
+  });
+});
+
+describe("buildRenamedJiraBranchName", () => {
+  it("uses the sanitized title when the current branch is a default-prefix temp", () => {
+    expect(
+      buildRenamedJiraBranchName({
+        currentBranch: "empcode/abcd1234",
+        newJiraKey: "JIRA-123",
+        fallbackTitle: "Fix login flow",
+      }),
+    ).toBe("JIRA-123/fix-login-flow");
+  });
+
+  it("uses the sanitized title when the current branch is a jira-prefix temp", () => {
+    expect(
+      buildRenamedJiraBranchName({
+        currentBranch: "OLD-9/abcd1234",
+        newJiraKey: "NEW-1",
+        fallbackTitle: "Patch payment bug",
+      }),
+    ).toBe("NEW-1/patch-payment-bug");
+  });
+
+  it("preserves the existing suffix when the current branch is semantic", () => {
+    expect(
+      buildRenamedJiraBranchName({
+        currentBranch: "feature/foo-bar",
+        newJiraKey: "JIRA-7",
+        fallbackTitle: "Title that should not be used",
+      }),
+    ).toBe("JIRA-7/foo-bar");
+  });
+
+  it("falls back to the title when the current branch has no suffix", () => {
+    expect(
+      buildRenamedJiraBranchName({
+        currentBranch: "main",
+        newJiraKey: "JIRA-9",
+        fallbackTitle: "Hotfix release",
+      }),
+    ).toBe("JIRA-9/hotfix-release");
+  });
+
+  it("normalizes lowercase Jira keys to uppercase", () => {
+    expect(
+      buildRenamedJiraBranchName({
+        currentBranch: "feature/refactor-auth",
+        newJiraKey: "abc-123",
+        fallbackTitle: "anything",
+      }),
+    ).toBe("ABC-123/refactor-auth");
   });
 });
 

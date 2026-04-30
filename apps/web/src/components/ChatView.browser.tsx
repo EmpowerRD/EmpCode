@@ -2,6 +2,7 @@
 import "../index.css";
 
 import {
+  DEFAULT_THREAD_TITLE,
   EventId,
   ORCHESTRATION_WS_METHODS,
   EnvironmentId,
@@ -349,6 +350,7 @@ function createSnapshotForTargetUser(options: {
         },
         interactionMode: "default",
         runtimeMode: "full-access",
+        jiraKey: null,
         branch: "main",
         worktreePath: null,
         latestTurn: null,
@@ -407,13 +409,14 @@ function addThreadToSnapshot(
       {
         id: threadId,
         projectId: PROJECT_ID,
-        title: "New thread",
+        title: DEFAULT_THREAD_TITLE,
         modelSelection: {
           provider: "codex",
           model: "gpt-5",
         },
         interactionMode: "default",
         runtimeMode: "full-access",
+        jiraKey: null,
         branch: "main",
         worktreePath: null,
         latestTurn: null,
@@ -750,6 +753,7 @@ function createSnapshotWithSecondaryProject(options?: {
           modelSelection: { provider: "codex", model: "gpt-5" },
           interactionMode: "default",
           runtimeMode: "full-access",
+          jiraKey: null,
           branch: "release/docs-portal",
           worktreePath: null,
           latestTurn: null,
@@ -782,6 +786,7 @@ function createSnapshotWithSecondaryProject(options?: {
           modelSelection: { provider: "codex", model: "gpt-5" },
           interactionMode: "default",
           runtimeMode: "full-access",
+          jiraKey: null,
           branch: "release/docs-archive",
           worktreePath: null,
           latestTurn: null,
@@ -2424,7 +2429,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
               prepareWorktree: {
                 projectCwd: "/repo/project",
                 baseBranch: "main",
-                branch: expect.stringMatching(/^t3code\/[0-9a-f]{8}$/),
+                branch: expect.stringMatching(/^empcode\/[0-9a-f]{8}$/),
               },
               runSetupScript: true,
             },
@@ -2528,7 +2533,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
               prepareWorktree: {
                 projectCwd: "/repo/project",
                 baseBranch: "main",
-                branch: expect.stringMatching(/^t3code\/[0-9a-f]{8}$/),
+                branch: expect.stringMatching(/^empcode\/[0-9a-f]{8}$/),
               },
               runSetupScript: true,
             },

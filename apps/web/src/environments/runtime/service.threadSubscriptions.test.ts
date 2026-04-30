@@ -103,6 +103,7 @@ function makeThreadShellSnapshot(params: {
         },
         runtimeMode: "full-access",
         interactionMode: "default",
+        jiraKey: null,
         branch: null,
         worktreePath: null,
         latestTurn:

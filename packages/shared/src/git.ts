@@ -10,7 +10,6 @@ import * as Effect from "effect/Effect";
 import * as Random from "effect/Random";
 
 export const DEFAULT_WORKTREE_BRANCH_PREFIX = "empcode";
-export const WORKTREE_BRANCH_PREFIX = DEFAULT_WORKTREE_BRANCH_PREFIX;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -19,6 +18,9 @@ function escapeRegExp(value: string): string {
 function buildTemporaryWorktreeBranchPattern(prefix: string): RegExp {
   return new RegExp(`^${escapeRegExp(prefix)}\\/[0-9a-f]{8}$`, "i");
 }
+
+const TEMPORARY_WORKTREE_BRANCH_SUFFIX_PATTERN = /^[0-9a-f]{8}$/i;
+const JIRA_KEY_PREFIX_PATTERN = /^[A-Z][A-Z0-9]*-\d+$/;
 
 /**
  * Sanitize an arbitrary string into a valid, lowercase git branch fragment.
@@ -122,6 +124,30 @@ export function isTemporaryWorktreeBranchForPrefix(branch: string, prefix: strin
   );
 }
 
+/**
+ * Match any branch in temporary-worktree shape — `<prefix>/<8-hex>` — where
+ * the prefix is either the default temp prefix or a Jira-style key. Useful
+ * when the current branch's prefix may not equal the desired prefix (e.g.
+ * the user assigned a Jira key to a thread that already had an `empcode/...`
+ * temp branch).
+ */
+export function isTemporaryWorktreeBranchForAnyPrefix(branch: string): boolean {
+  const trimmed = branch.trim();
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === trimmed.length - 1) {
+    return false;
+  }
+  const prefix = trimmed.slice(0, slashIndex);
+  const suffix = trimmed.slice(slashIndex + 1);
+  if (!TEMPORARY_WORKTREE_BRANCH_SUFFIX_PATTERN.test(suffix)) {
+    return false;
+  }
+  return (
+    prefix.toLowerCase() === DEFAULT_WORKTREE_BRANCH_PREFIX ||
+    JIRA_KEY_PREFIX_PATTERN.test(prefix)
+  );
+}
+
 export function deriveWorktreeBranchSuffix(branch: string): string | null {
   const trimmed = branch.trim().replace(/^refs\/heads\//, "");
   const slashIndex = trimmed.indexOf("/");
@@ -135,6 +161,30 @@ export function buildSemanticWorktreeBranchName(prefix: string, suffix: string):
   const normalizedPrefix = normalizeWorktreeBranchPrefix(prefix);
   const normalizedSuffix = sanitizeBranchFragment(suffix);
   return `${normalizedPrefix}/${normalizedSuffix.length > 0 ? normalizedSuffix : "update"}`;
+}
+
+/**
+ * Compute the target branch name when assigning a Jira key to an existing
+ * branch. Used by both the dialog preview on the client and the rename
+ * dispatch on the server, so the two stay in lockstep.
+ *
+ * - If the current branch is a temporary placeholder (any recognized prefix),
+ *   the random hex suffix is meaningless — replace it with a sanitized
+ *   fragment of the thread title.
+ * - Otherwise the existing suffix is preserved (just re-prefixed with the
+ *   new Jira key), which keeps user-meaningful branch names stable.
+ */
+export function buildRenamedJiraBranchName(input: {
+  readonly currentBranch: string;
+  readonly newJiraKey: string;
+  readonly fallbackTitle: string;
+}): string {
+  const isTemporary = isTemporaryWorktreeBranchForAnyPrefix(input.currentBranch);
+  const titleFragment = sanitizeBranchFragment(input.fallbackTitle);
+  const suffix = isTemporary
+    ? titleFragment
+    : (deriveWorktreeBranchSuffix(input.currentBranch) ?? titleFragment);
+  return buildSemanticWorktreeBranchName(input.newJiraKey, suffix);
 }
 
 export function isMainOrMasterBranchName(branch: string): boolean {

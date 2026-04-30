@@ -1023,10 +1023,21 @@ describe("resolveLiveThreadBranchUpdate", () => {
 
   it("does not regress a semantic thread branch back to a temporary worktree branch", () => {
     const update = resolveLiveThreadBranchUpdate({
-      threadBranch: "t3code/github-query-rate-limit",
-      gitStatus: status({ branch: "t3code/bda76797" }),
+      threadBranch: "empcode/github-query-rate-limit",
+      gitStatus: status({ branch: "empcode/bda76797" }),
     });
 
+    assert.equal(update, null);
+  });
+
+  it("treats jira-prefixed temp branches as placeholders too", () => {
+    const update = resolveLiveThreadBranchUpdate({
+      threadBranch: "feature/some-real-name",
+      gitStatus: status({ branch: "JIRA-123/abcd1234" }),
+    });
+
+    // Thread is on a real branch, git status reports a JIRA-prefixed temp —
+    // do not regress to that temp branch.
     assert.equal(update, null);
   });
 });

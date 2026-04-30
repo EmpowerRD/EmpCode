@@ -150,6 +150,7 @@ const makeDefaultOrchestrationReadModel = () => {
         modelSelection: defaultModelSelection,
         interactionMode: "default" as const,
         runtimeMode: "full-access" as const,
+        jiraKey: null,
         branch: null,
         worktreePath: null,
         createdAt: now,
@@ -178,6 +179,7 @@ const makeDefaultOrchestrationThreadShell = (
     modelSelection: defaultModelSelection,
     runtimeMode: "full-access",
     interactionMode: "default",
+    jiraKey: null,
     branch: null,
     worktreePath: null,
     latestTurn: null,
@@ -2894,6 +2896,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             modelSelection: defaultModelSelection,
             interactionMode: "default" as const,
             runtimeMode: "full-access" as const,
+            jiraKey: null,
             branch: null,
             worktreePath: null,
             createdAt: now,
@@ -4018,5 +4021,243 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       assertFailure(result, terminalError);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect(
+    "setThreadJiraKey dispatches a single jiraKey-only meta-update when renameBranch=false",
+    () =>
+      Effect.gen(function* () {
+        const dispatchedCommands: Array<OrchestrationCommand> = [];
+        const renameBranch = vi.fn();
+
+        yield* buildAppUnderTest({
+          layers: {
+            gitCore: {
+              renameBranch,
+            },
+            orchestrationEngine: {
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
+              readEvents: () => Stream.empty,
+            },
+            projectionSnapshotQuery: {
+              getThreadShellById: () =>
+                Effect.succeed(
+                  Option.some(
+                    makeDefaultOrchestrationThreadShell({
+                      branch: "feature/foo",
+                      worktreePath: "/tmp/wt",
+                    }),
+                  ),
+                ),
+              getProjectShellById: () =>
+                Effect.succeed(
+                  Option.some({
+                    id: defaultProjectId,
+                    title: "Default Project",
+                    workspaceRoot: "/tmp/project",
+                    defaultModelSelection,
+                    scripts: [],
+                    createdAt: new Date(0).toISOString(),
+                    updatedAt: new Date(0).toISOString(),
+                  }),
+                ),
+            },
+          },
+        });
+
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const result = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.setThreadJiraKey]({
+              threadId: defaultThreadId,
+              jiraKey: "JIRA-123",
+              renameBranch: false,
+            }),
+          ),
+        );
+
+        assert.equal(result.sequence, 1);
+        assert.equal(dispatchedCommands.length, 1);
+        const command = dispatchedCommands[0];
+        assertTrue(command?.type === "thread.meta.update");
+        if (command?.type === "thread.meta.update") {
+          assert.equal(command.jiraKey, "JIRA-123");
+          assert.equal(command.branch, undefined);
+        }
+        assert.equal(renameBranch.mock.calls.length, 0);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect(
+    "setThreadJiraKey emits a single combined meta-update after a successful git rename",
+    () =>
+      Effect.gen(function* () {
+        const dispatchedCommands: Array<OrchestrationCommand> = [];
+        const renameBranch = vi.fn(
+          (
+            input: Parameters<GitCoreShape["renameBranch"]>[0],
+          ): ReturnType<GitCoreShape["renameBranch"]> =>
+            Effect.succeed({ branch: input.newBranch }),
+        );
+        const refreshStatus = vi.fn((_: string) =>
+          Effect.succeed({
+            isRepo: true,
+            hasOriginRemote: true,
+            isDefaultBranch: false,
+            branch: "JIRA-123/foo",
+            hasWorkingTreeChanges: false,
+            workingTree: { files: [], insertions: 0, deletions: 0 },
+            hasUpstream: true,
+            aheadCount: 0,
+            behindCount: 0,
+            pr: null,
+          }),
+        );
+
+        yield* buildAppUnderTest({
+          layers: {
+            gitCore: { renameBranch },
+            gitStatusBroadcaster: { refreshStatus },
+            orchestrationEngine: {
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
+              readEvents: () => Stream.empty,
+            },
+            projectionSnapshotQuery: {
+              getThreadShellById: () =>
+                Effect.succeed(
+                  Option.some(
+                    makeDefaultOrchestrationThreadShell({
+                      title: "Anything",
+                      branch: "feature/foo",
+                      worktreePath: "/tmp/wt",
+                    }),
+                  ),
+                ),
+              getProjectShellById: () =>
+                Effect.succeed(
+                  Option.some({
+                    id: defaultProjectId,
+                    title: "Default Project",
+                    workspaceRoot: "/tmp/project",
+                    defaultModelSelection,
+                    scripts: [],
+                    createdAt: new Date(0).toISOString(),
+                    updatedAt: new Date(0).toISOString(),
+                  }),
+                ),
+            },
+          },
+        });
+
+        const wsUrl = yield* getWsServerUrl("/ws");
+        yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.setThreadJiraKey]({
+              threadId: defaultThreadId,
+              jiraKey: "JIRA-123",
+              renameBranch: true,
+            }),
+          ),
+        );
+
+        // Expect exactly one git rename and exactly one combined meta.update.
+        assert.equal(renameBranch.mock.calls.length, 1);
+        assert.deepEqual(renameBranch.mock.calls[0]?.[0], {
+          cwd: "/tmp/wt",
+          oldBranch: "feature/foo",
+          newBranch: "JIRA-123/foo",
+        });
+
+        assert.equal(dispatchedCommands.length, 1);
+        const command = dispatchedCommands[0];
+        assertTrue(command?.type === "thread.meta.update");
+        if (command?.type === "thread.meta.update") {
+          assert.equal(command.jiraKey, "JIRA-123");
+          assert.equal(command.branch, "JIRA-123/foo");
+        }
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect(
+    "setThreadJiraKey does not dispatch when the git rename fails",
+    () =>
+      Effect.gen(function* () {
+        const dispatchedCommands: Array<OrchestrationCommand> = [];
+        const renameBranch = vi.fn(
+          (
+            _: Parameters<GitCoreShape["renameBranch"]>[0],
+          ): ReturnType<GitCoreShape["renameBranch"]> =>
+            Effect.fail(
+              new GitCommandError({
+                operation: "GitCore.renameBranch",
+                cwd: "/tmp/wt",
+                command: "git branch -m",
+                detail: "boom",
+              }),
+            ),
+        );
+
+        yield* buildAppUnderTest({
+          layers: {
+            gitCore: { renameBranch },
+            orchestrationEngine: {
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
+              readEvents: () => Stream.empty,
+            },
+            projectionSnapshotQuery: {
+              getThreadShellById: () =>
+                Effect.succeed(
+                  Option.some(
+                    makeDefaultOrchestrationThreadShell({
+                      title: "Anything",
+                      branch: "feature/foo",
+                      worktreePath: "/tmp/wt",
+                    }),
+                  ),
+                ),
+              getProjectShellById: () =>
+                Effect.succeed(
+                  Option.some({
+                    id: defaultProjectId,
+                    title: "Default Project",
+                    workspaceRoot: "/tmp/project",
+                    defaultModelSelection,
+                    scripts: [],
+                    createdAt: new Date(0).toISOString(),
+                    updatedAt: new Date(0).toISOString(),
+                  }),
+                ),
+            },
+          },
+        });
+
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const result = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.setThreadJiraKey]({
+              threadId: defaultThreadId,
+              jiraKey: "JIRA-123",
+              renameBranch: true,
+            }),
+          ).pipe(Effect.result),
+        );
+
+        assertTrue(result._tag === "Failure");
+        assertTrue(result.failure._tag === "OrchestrationDispatchCommandError");
+        // No meta-update event should have been emitted when the rename fails.
+        assert.equal(dispatchedCommands.length, 0);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 });

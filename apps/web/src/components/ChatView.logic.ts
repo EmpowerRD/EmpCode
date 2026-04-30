@@ -1,4 +1,5 @@
 import {
+  DEFAULT_THREAD_TITLE,
   type EnvironmentId,
   ProjectId,
   type ModelSelection,
@@ -34,7 +35,7 @@ export function buildLocalDraftThread(
     environmentId: draftThread.environmentId,
     codexThreadId: null,
     projectId: draftThread.projectId,
-    title: "New thread",
+    title: DEFAULT_THREAD_TITLE,
     modelSelection: fallbackModelSelection,
     runtimeMode: draftThread.runtimeMode,
     interactionMode: draftThread.interactionMode,

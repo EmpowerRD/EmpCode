@@ -514,7 +514,7 @@ describe("ProviderCommandReactor", () => {
         type: "thread.meta.update",
         commandId: CommandId.make("cmd-thread-branch"),
         threadId: ThreadId.make("thread-1"),
-        branch: "t3code/1234abcd",
+        branch: "empcode/1234abcd",
         worktreePath: "/tmp/provider-project-worktree",
       }),
     );
@@ -557,6 +557,53 @@ describe("ProviderCommandReactor", () => {
       message: "Add a safer reconnect backoff.",
     });
     expect(harness.refreshStatus.mock.calls[0]?.[0]).toBe("/tmp/provider-project-worktree");
+  });
+
+  it("renames an empcode/* placeholder under the thread Jira key on the first turn", async () => {
+    const harness = await createHarness();
+    const now = new Date().toISOString();
+
+    // The thread already has a Jira key set, but its worktree branch is still
+    // the original `empcode/<hex>` placeholder — pre-fix, the reactor would
+    // skip the rename here because the prefix didn't match the Jira key.
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.meta.update",
+        commandId: CommandId.make("cmd-thread-jira-and-branch"),
+        threadId: ThreadId.make("thread-1"),
+        jiraKey: "JIRA-123",
+        branch: "empcode/abcd1234",
+        worktreePath: "/tmp/provider-project-worktree",
+      }),
+    );
+
+    harness.generateBranchName.mockImplementation((_: unknown) =>
+      Effect.succeed({ branch: "feature/clean-suffix" }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-jira-rename"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-jira-rename"),
+          role: "user",
+          text: "Add a safer reconnect backoff.",
+          attachments: [],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.renameBranch.mock.calls.length === 1);
+    expect(harness.renameBranch.mock.calls[0]?.[0]).toMatchObject({
+      cwd: "/tmp/provider-project-worktree",
+      oldBranch: "empcode/abcd1234",
+      newBranch: "JIRA-123/clean-suffix",
+    });
   });
 
   it("forwards codex model options through session start and turn send", async () => {

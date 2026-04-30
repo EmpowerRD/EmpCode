@@ -1,14 +1,10 @@
 import { scopeThreadRef } from "@t3tools/client-runtime";
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_THREAD_TITLE, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
 import {
-  buildSemanticWorktreeBranchName,
-  DEFAULT_WORKTREE_BRANCH_PREFIX,
-  deriveWorktreeBranchSuffix,
+  buildRenamedJiraBranchName,
   isMainOrMasterBranchName,
-  isTemporaryWorktreeBranchForPrefix,
-  normalizeJiraProjectKey,
+  isTemporaryWorktreeBranchForAnyPrefix,
   normalizeWorktreeBranchPrefix,
-  sanitizeBranchFragment,
   validateJiraKeyInput,
 } from "@t3tools/shared/git";
 import { useEffect, useMemo, useState } from "react";
@@ -29,29 +25,6 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { toastManager } from "./ui/toast";
-
-function buildRenameTarget(input: {
-  branch: string;
-  jiraKey: string;
-  existingJiraKey: string | null;
-  title: string;
-}): string {
-  const suffix =
-    deriveWorktreeBranchSuffix(input.branch) ??
-    sanitizeBranchFragment(input.branch) ??
-    sanitizeBranchFragment(input.title) ??
-    "update";
-  const preferredSuffix = isTemporaryWorktreeBranchForPrefix(
-    input.branch,
-    input.existingJiraKey ?? DEFAULT_WORKTREE_BRANCH_PREFIX,
-  )
-    ? sanitizeBranchFragment(input.title)
-    : suffix;
-  return buildSemanticWorktreeBranchName(
-    input.jiraKey,
-    preferredSuffix.length > 0 ? preferredSuffix : "update",
-  );
-}
 
 export function BranchToolbarJiraKeyControl(props: {
   environmentId: EnvironmentId;
@@ -82,7 +55,7 @@ export function BranchToolbarJiraKeyControl(props: {
   const activeThread = serverThread ?? draftThread;
   const currentJiraKey = activeThread?.jiraKey ?? null;
   const currentBranch = activeThread?.branch ?? null;
-  const currentTitle = serverThread?.title ?? "New thread";
+  const currentTitle = serverThread?.title ?? DEFAULT_THREAD_TITLE;
   const gitStatus = useGitStatus({
     environmentId,
     cwd: effectiveEnvMode === "worktree" ? null : projectCwd,
@@ -92,9 +65,12 @@ export function BranchToolbarJiraKeyControl(props: {
     effectiveEnvMode === "worktree" ||
     (resolvedLocalBranch !== null && !isMainOrMasterBranchName(resolvedLocalBranch));
   const guardrailMessage =
-    jiraKeyAllowed || currentJiraKey !== null
-      ? null
-      : "Jira keys can only be set in a worktree or when the current checkout is not main or master.";
+    jiraKeyAllowed || currentJiraKey !== null ? null : (
+      <>
+        Jira keys can only be set in a worktree or when the current checkout is not{" "}
+        <code>main</code> or <code>master</code>.
+      </>
+    );
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -167,25 +143,23 @@ export function BranchToolbarJiraKeyControl(props: {
         return;
       }
 
-      const renameTarget = buildRenameTarget({
-        branch: currentBranch,
-        jiraKey: normalizedJiraKey,
-        existingJiraKey: currentJiraKey,
-        title: currentTitle,
+      const renameTarget = buildRenamedJiraBranchName({
+        currentBranch,
+        newJiraKey: normalizedJiraKey,
+        fallbackTitle: currentTitle,
       });
 
-      if (
-        isTemporaryWorktreeBranchForPrefix(
-          currentBranch,
-          currentJiraKey ?? DEFAULT_WORKTREE_BRANCH_PREFIX,
-        )
-      ) {
+      // If the current branch is still a server-generated placeholder, the
+      // random hex suffix is meaningless — auto-rename to the title-derived
+      // form without bothering the user with a confirm step.
+      if (isTemporaryWorktreeBranchForAnyPrefix(currentBranch)) {
         await persistServerJiraKey(normalizedJiraKey, true);
         setDialogOpen(false);
         props.onComposerFocusRequest?.();
         return;
       }
 
+      // Save the Jira key now (no rename), then ask the user whether to rename.
       await persistServerJiraKey(normalizedJiraKey, false);
       setPendingRename({ jiraKey: normalizedJiraKey, targetBranch: renameTarget });
       setDialogOpen(false);
@@ -247,7 +221,7 @@ export function BranchToolbarJiraKeyControl(props: {
             <div className="space-y-2">
               <Input
                 autoFocus
-                placeholder={`${normalizeJiraProjectKey(jiraProjectKey) ?? "ABC"}-123`}
+                placeholder={`${jiraProjectKey ?? "ABC"}-123`}
                 value={draftValue}
                 onChange={(event) => setDraftValue(event.currentTarget.value)}
               />
@@ -256,15 +230,15 @@ export function BranchToolbarJiraKeyControl(props: {
               ) : null}
               {isBlockedByGuardrail ? (
                 <p className="text-destructive text-xs">
-                  Jira keys can only be set in a worktree or when the current checkout is not `main`
-                  or `master`.
+                  Jira keys can only be set in a worktree or when the current checkout is not{" "}
+                  <code>main</code> or <code>master</code>.
                 </p>
               ) : null}
               {guardrailMessage ? (
                 <p className="text-muted-foreground text-xs">{guardrailMessage}</p>
               ) : null}
               <p className="text-muted-foreground text-xs">
-                Branches use `{normalizedJiraKey ?? "KEY"}/slug` when a Jira key is set.
+                Branches use <code>{normalizedJiraKey ?? "KEY"}/slug</code> when a Jira key is set.
               </p>
             </div>
           </DialogPanel>

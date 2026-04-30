@@ -1,6 +1,7 @@
 import {
   type ChatAttachment,
   CommandId,
+  DEFAULT_THREAD_TITLE,
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
@@ -15,7 +16,7 @@ import {
   buildSemanticWorktreeBranchName,
   DEFAULT_WORKTREE_BRANCH_PREFIX,
   deriveWorktreeBranchSuffix,
-  isTemporaryWorktreeBranchForPrefix,
+  isTemporaryWorktreeBranchForAnyPrefix,
   normalizeWorktreeBranchPrefix,
 } from "@t3tools/shared/git";
 import { Cache, Cause, Duration, Effect, Equal, Layer, Option, Schema, Stream } from "effect";
@@ -81,7 +82,6 @@ const serverCommandId = (tag: string): CommandId =>
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
 const DEFAULT_RUNTIME_MODE: RuntimeMode = "full-access";
-const DEFAULT_THREAD_TITLE = "New thread";
 
 function canReplaceThreadTitle(currentTitle: string, titleSeed?: string): boolean {
   const trimmedCurrentTitle = currentTitle.trim();
@@ -460,12 +460,17 @@ const make = Effect.gen(function* () {
       const thread = yield* resolveThread(input.threadId);
       if (!thread) return;
 
+      // Skip the AI rename unless the current branch is still a server-generated
+      // placeholder. Use the prefix-agnostic check so we still rename when the
+      // user has set a Jira key on a thread whose worktree was created before
+      // the key was assigned (current branch prefix !== thread.jiraKey).
+      if (!isTemporaryWorktreeBranchForAnyPrefix(oldBranch)) {
+        return;
+      }
+
       const desiredPrefix = normalizeWorktreeBranchPrefix(
         thread.jiraKey ?? DEFAULT_WORKTREE_BRANCH_PREFIX,
       );
-      if (!isTemporaryWorktreeBranchForPrefix(oldBranch, desiredPrefix)) {
-        return;
-      }
 
       const { textGenerationModelSelection: modelSelection } =
         yield* serverSettingsService.getSettings;

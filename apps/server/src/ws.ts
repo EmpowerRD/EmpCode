@@ -28,15 +28,11 @@ import { clamp } from "effect/Number";
 import { HttpRouter, HttpServerRequest } from "effect/unstable/http";
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import {
-  buildSemanticWorktreeBranchName,
-  DEFAULT_WORKTREE_BRANCH_PREFIX,
-  deriveWorktreeBranchSuffix,
+  buildRenamedJiraBranchName,
   isMainOrMasterBranchName,
-  isTemporaryWorktreeBranchForPrefix,
   normalizeJiraDomain,
   normalizeJiraProjectKey,
   normalizeWorktreeBranchPrefix,
-  sanitizeBranchFragment,
   validateJiraKeyInput,
 } from "@t3tools/shared/git";
 
@@ -168,6 +164,18 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
       const sessions = yield* SessionCredentialService;
       const serverCommandId = (tag: string) =>
         CommandId.make(`server:${tag}:${crypto.randomUUID()}`);
+
+      // Read Jira-related env vars exactly once at layer construction. The
+      // descriptor exposed to clients (`loadServerConfig`) and the dispatch
+      // guardrail both close over these instead of re-reading `process.env`
+      // on the hot path.
+      const jiraDomain = normalizeJiraDomain(process.env.JIRA_DOMAIN);
+      const jiraProjectKey = normalizeJiraProjectKey(process.env.JIRA_PROJECT_KEY);
+      if (process.env.JIRA_PROJECT_KEY && jiraProjectKey === null) {
+        yield* Effect.logWarning(
+          `JIRA_PROJECT_KEY="${process.env.JIRA_PROJECT_KEY}" is not a valid project key (must be A-Z/0-9, start with a letter). The project-key constraint is disabled.`,
+        );
+      }
 
       const loadAuthAccessSnapshot = () =>
         Effect.all({
@@ -529,8 +537,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
         const settings = yield* serverSettings.getSettings;
         const environment = yield* serverEnvironment.getDescriptor;
         const auth = yield* serverAuth.getDescriptor();
-        const jiraDomain = normalizeJiraDomain(process.env.JIRA_DOMAIN);
-        const jiraProjectKey = normalizeJiraProjectKey(process.env.JIRA_PROJECT_KEY);
 
         return {
           environment,
@@ -588,8 +594,8 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           ),
         );
 
-      const loadThreadDetail = (threadId: ThreadId) =>
-        projectionSnapshotQuery.getThreadDetailById(threadId).pipe(
+      const loadThreadShell = (threadId: ThreadId) =>
+        projectionSnapshotQuery.getThreadShellById(threadId).pipe(
           Effect.mapError(
             (cause) =>
               new OrchestrationDispatchCommandError({
@@ -619,7 +625,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             return;
           }
 
-          const jiraProjectKey = normalizeJiraProjectKey(process.env.JIRA_PROJECT_KEY);
           const validation = validateJiraKeyInput(input.jiraKey, jiraProjectKey);
           if (validation.error) {
             return yield* Effect.fail(
@@ -664,8 +669,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
         Effect.gen(function* () {
           const normalizedJiraKey =
             input.jiraKey === null ? null : normalizeWorktreeBranchPrefix(input.jiraKey);
-          const thread = yield* loadThreadDetail(input.threadId);
-          const project = yield* loadProjectShell(thread.projectId);
+          const thread = yield* loadThreadShell(input.threadId);
           yield* ensureJiraKeyAllowedForContext({
             jiraKey: normalizedJiraKey,
             projectId: thread.projectId,
@@ -673,38 +677,45 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             isWorktreeContext: thread.worktreePath !== null,
           });
 
-          const metaUpdateResult = yield* dispatchNormalizedCommand(
-            yield* normalizeDispatchCommand({
-              type: "thread.meta.update",
-              commandId: serverCommandId("thread-jira-key-update"),
-              threadId: input.threadId,
-              jiraKey: normalizedJiraKey,
-            }),
-          );
+          // Decide up-front whether this call should also rename the worktree
+          // branch. If not, dispatch a single jiraKey-only meta update.
+          const shouldRename =
+            input.renameBranch && normalizedJiraKey !== null && thread.branch !== null;
 
-          if (!input.renameBranch || normalizedJiraKey === null || !thread.branch) {
-            return metaUpdateResult;
+          if (!shouldRename) {
+            return yield* dispatchNormalizedCommand(
+              yield* normalizeDispatchCommand({
+                type: "thread.meta.update",
+                commandId: serverCommandId("thread-jira-key-update"),
+                threadId: input.threadId,
+                jiraKey: normalizedJiraKey,
+              }),
+            );
           }
 
+          // We have a non-null jiraKey, an existing branch, and rename was
+          // requested. Run the git rename FIRST, then dispatch a single
+          // combined `thread.meta.update` carrying both fields. This avoids
+          // a torn intermediate state where the projection has the new
+          // jiraKey but the old branch.
+          const project = yield* loadProjectShell(thread.projectId);
           const cwd = thread.worktreePath ?? project.workspaceRoot;
-          const currentBranch = thread.branch;
-          const currentSuffix =
-            deriveWorktreeBranchSuffix(currentBranch) ??
-            sanitizeBranchFragment(thread.title) ??
-            "update";
-          const preferredSuffix = isTemporaryWorktreeBranchForPrefix(
+          const currentBranch = thread.branch as string;
+          const targetBranch = buildRenamedJiraBranchName({
             currentBranch,
-            thread.jiraKey ?? DEFAULT_WORKTREE_BRANCH_PREFIX,
-          )
-            ? sanitizeBranchFragment(thread.title)
-            : currentSuffix;
-          const targetBranch = buildSemanticWorktreeBranchName(
-            normalizedJiraKey,
-            preferredSuffix.length > 0 ? preferredSuffix : "update",
-          );
+            newJiraKey: normalizedJiraKey as string,
+            fallbackTitle: thread.title,
+          });
 
           if (targetBranch === currentBranch) {
-            return metaUpdateResult;
+            return yield* dispatchNormalizedCommand(
+              yield* normalizeDispatchCommand({
+                type: "thread.meta.update",
+                commandId: serverCommandId("thread-jira-key-update"),
+                threadId: input.threadId,
+                jiraKey: normalizedJiraKey,
+              }),
+            );
           }
 
           const renamed = yield* git
@@ -723,17 +734,18 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
               ),
             );
 
-          const branchUpdateResult = yield* dispatchNormalizedCommand(
+          const result = yield* dispatchNormalizedCommand(
             yield* normalizeDispatchCommand({
               type: "thread.meta.update",
-              commandId: serverCommandId("thread-jira-key-branch-update"),
+              commandId: serverCommandId("thread-jira-key-update"),
               threadId: input.threadId,
+              jiraKey: normalizedJiraKey,
               branch: renamed.branch,
             }),
           );
 
           yield* refreshGitStatus(cwd);
-          return branchUpdateResult;
+          return result;
         });
 
       const validateNormalizedCommandJiraKeyGuardrail = (normalizedCommand: OrchestrationCommand) =>
@@ -752,7 +764,7 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
             if (normalizedCommand.jiraKey === undefined) {
               return;
             }
-            const thread = yield* loadThreadDetail(normalizedCommand.threadId);
+            const thread = yield* loadThreadShell(normalizedCommand.threadId);
             yield* ensureJiraKeyAllowedForContext({
               jiraKey: normalizedCommand.jiraKey,
               projectId: thread.projectId,

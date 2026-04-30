@@ -82,6 +82,7 @@ describe("orchestration projector", () => {
         },
         runtimeMode: "full-access",
         interactionMode: "default",
+        jiraKey: null,
         branch: null,
         worktreePath: null,
         latestTurn: null,

@@ -141,6 +141,7 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         },
         interactionMode: "default",
         runtimeMode: "full-access",
+        jiraKey: null,
         branch: "main",
         worktreePath: null,
         latestTurn: null,
