@@ -201,6 +201,7 @@ function createMockEnvironmentApi(input: {
   browse: EnvironmentApi["filesystem"]["browse"];
   dispatchCommand: EnvironmentApi["orchestration"]["dispatchCommand"];
   setThreadJiraKey?: EnvironmentApi["orchestration"]["setThreadJiraKey"];
+  removeWorktree?: EnvironmentApi["git"]["removeWorktree"];
 }): EnvironmentApi {
   return {
     terminal: {} as EnvironmentApi["terminal"],
@@ -208,7 +209,13 @@ function createMockEnvironmentApi(input: {
     filesystem: {
       browse: input.browse,
     },
-    git: {} as EnvironmentApi["git"],
+    git: {
+      removeWorktree:
+        input.removeWorktree ??
+        (async () => {
+          throw new Error("Not implemented in browser test.");
+        }),
+    } as EnvironmentApi["git"],
     orchestration: {
       dispatchCommand: input.dispatchCommand,
       setThreadJiraKey:
@@ -3719,6 +3726,100 @@ describe("ChatView timeline estimator parity (full app)", () => {
       await expect.element(confirmButton).toBeVisible();
     } finally {
       localStorage.removeItem("t3code:client-settings:v1");
+      await mounted.cleanup();
+    }
+  });
+
+  it("offers to delete the orphaned worktree when archiving a thread", async () => {
+    const baseSnapshot = createSnapshotForTargetUser({
+      targetMessageId: "msg-user-archive-worktree-delete-test" as MessageId,
+      targetText: "archive worktree delete target",
+    });
+    const snapshot = {
+      ...baseSnapshot,
+      threads: baseSnapshot.threads.map((thread, index) =>
+        index === 0
+          ? {
+              ...thread,
+              branch: "feature/archive-worktree",
+              worktreePath: "/repo/worktrees/archive-worktree",
+            }
+          : thread,
+      ),
+    };
+
+    const confirmMock = vi.fn().mockResolvedValue(true);
+    const dispatchCommandMock = vi.fn(async () => ({
+      sequence: fixture.snapshot.snapshotSequence + 1,
+    }));
+    const removeWorktreeMock = vi.fn(async () => undefined);
+
+    __setEnvironmentApiOverrideForTests(
+      LOCAL_ENVIRONMENT_ID,
+      createMockEnvironmentApi({
+        browse: vi.fn(async () => ({
+          parentPath: "~/",
+          entries: [],
+        })),
+        dispatchCommand: dispatchCommandMock,
+        removeWorktree: removeWorktreeMock,
+      }),
+    );
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot,
+    });
+
+    try {
+      await waitForServerConfigToApply();
+      window.desktopBridge = {
+        confirm: confirmMock,
+        setTheme: vi.fn().mockResolvedValue(undefined),
+      } as unknown as NonNullable<typeof window.desktopBridge>;
+
+      const threadRow = page.getByTestId(`thread-row-${THREAD_ID}`);
+      await expect.element(threadRow).toBeInTheDocument();
+      await threadRow.hover();
+
+      await page.getByTestId(`thread-archive-${THREAD_ID}`).click();
+
+      await vi.waitFor(
+        () => {
+          expect(confirmMock).toHaveBeenCalledWith(
+            [
+              "This thread is the only one linked to this worktree:",
+              "archive-worktree",
+              "",
+              "Delete the worktree too?",
+            ].join("\n"),
+          );
+          expect(dispatchCommandMock).toHaveBeenCalledTimes(2);
+          expect(dispatchCommandMock).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({
+              type: "thread.archive",
+              threadId: THREAD_ID,
+            }),
+          );
+          expect(removeWorktreeMock).toHaveBeenCalledWith({
+            cwd: "/repo/project",
+            path: "/repo/worktrees/archive-worktree",
+            force: true,
+          });
+          expect(dispatchCommandMock).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+              type: "thread.meta.update",
+              threadId: THREAD_ID,
+              branch: null,
+              worktreePath: null,
+            }),
+          );
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
       await mounted.cleanup();
     }
   });

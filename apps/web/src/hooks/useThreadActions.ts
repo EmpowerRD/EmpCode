@@ -11,6 +11,7 @@ import { ensureEnvironmentApi, readEnvironmentApi } from "../environmentApi";
 import { invalidateGitQueries } from "../lib/gitReactQuery";
 import { newCommandId } from "../lib/utils";
 import { readLocalApi } from "../localApi";
+import type { Thread } from "../types";
 import {
   selectProjectByRef,
   selectThreadByRef,
@@ -22,6 +23,15 @@ import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useSettings } from "./useSettings";
+
+interface WorktreeCleanupContext {
+  readonly thread: Thread;
+  readonly threadProject: ReturnType<typeof selectProjectByRef>;
+  readonly orphanedWorktreePath: string | null;
+  readonly displayWorktreePath: string | null;
+  readonly canDeleteWorktree: boolean;
+  readonly shouldDeleteWorktree?: boolean;
+}
 
 export function useThreadActions() {
   const sidebarThreadSortOrder = useSettings((settings) => settings.sidebarThreadSortOrder);
@@ -57,6 +67,116 @@ export function useThreadActions() {
     return resolveThreadRouteRef(currentRouteParams);
   }, [router]);
 
+  const getWorktreeCleanupContext = useCallback(
+    (target: ScopedThreadRef, threads?: readonly Thread[]): WorktreeCleanupContext | null => {
+      const state = useStore.getState();
+      const thread = selectThreadByRef(state, target);
+      if (!thread) {
+        return null;
+      }
+
+      const environmentThreads =
+        threads ?? selectThreadsForEnvironment(state, target.environmentId);
+      const threadProject = selectProjectByRef(state, {
+        environmentId: target.environmentId,
+        projectId: thread.projectId,
+      });
+      const orphanedWorktreePath = getOrphanedWorktreePathForThread(
+        environmentThreads,
+        target.threadId,
+      );
+      const displayWorktreePath = orphanedWorktreePath
+        ? formatWorktreePathForDisplay(orphanedWorktreePath)
+        : null;
+
+      return {
+        thread,
+        threadProject,
+        orphanedWorktreePath,
+        displayWorktreePath,
+        canDeleteWorktree: orphanedWorktreePath !== null && threadProject !== undefined,
+      };
+    },
+    [],
+  );
+
+  const confirmOrphanedWorktreeDeletion = useCallback(
+    async (
+      target: ScopedThreadRef,
+      threads?: readonly Thread[],
+    ): Promise<WorktreeCleanupContext | null> => {
+      const localApi = readLocalApi();
+      const cleanupContext = getWorktreeCleanupContext(target, threads);
+      if (!cleanupContext || !cleanupContext.canDeleteWorktree || !localApi) {
+        return cleanupContext;
+      }
+
+      const shouldDeleteWorktree = await localApi.dialogs.confirm(
+        [
+          "This thread is the only one linked to this worktree:",
+          cleanupContext.displayWorktreePath ?? cleanupContext.orphanedWorktreePath,
+          "",
+          "Delete the worktree too?",
+        ].join("\n"),
+      );
+
+      return {
+        ...cleanupContext,
+        shouldDeleteWorktree,
+      };
+    },
+    [getWorktreeCleanupContext],
+  );
+
+  const removeOrphanedWorktree = useCallback(
+    async (
+      target: ScopedThreadRef,
+      cleanupContext: Awaited<ReturnType<typeof confirmOrphanedWorktreeDeletion>> | null,
+    ) => {
+      if (
+        !cleanupContext?.shouldDeleteWorktree ||
+        !cleanupContext.orphanedWorktreePath ||
+        !cleanupContext.threadProject
+      ) {
+        return;
+      }
+
+      try {
+        await ensureEnvironmentApi(target.environmentId).git.removeWorktree({
+          cwd: cleanupContext.threadProject.cwd,
+          path: cleanupContext.orphanedWorktreePath,
+          force: true,
+        });
+        await ensureEnvironmentApi(target.environmentId).orchestration.dispatchCommand({
+          type: "thread.meta.update",
+          commandId: newCommandId(),
+          threadId: target.threadId,
+          branch: null,
+          worktreePath: null,
+        });
+        await invalidateGitQueries(queryClient, {
+          environmentId: target.environmentId,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown error removing worktree.";
+        console.error("Failed to remove orphaned worktree after thread cleanup", {
+          threadId: target.threadId,
+          projectCwd: cleanupContext.threadProject.cwd,
+          worktreePath: cleanupContext.orphanedWorktreePath,
+          error,
+        });
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Thread updated, but worktree removal failed",
+            description: `Could not remove ${cleanupContext.displayWorktreePath ?? cleanupContext.orphanedWorktreePath}. ${message}`,
+          }),
+        );
+      }
+    },
+    [queryClient],
+  );
+
   const archiveThread = useCallback(
     async (target: ScopedThreadRef) => {
       const api = readEnvironmentApi(target.environmentId);
@@ -67,6 +187,8 @@ export function useThreadActions() {
       if (thread.session?.status === "running" && thread.session.activeTurnId != null) {
         throw new Error("Cannot archive a running thread.");
       }
+
+      const cleanupContext = await confirmOrphanedWorktreeDeletion(target);
 
       await api.orchestration.dispatchCommand({
         type: "thread.archive",
@@ -81,8 +203,15 @@ export function useThreadActions() {
       ) {
         await handleNewThreadRef.current(scopeProjectRef(thread.environmentId, thread.projectId));
       }
+
+      await removeOrphanedWorktree(threadRef, cleanupContext);
     },
-    [getCurrentRouteThreadRef, resolveThreadTarget],
+    [
+      confirmOrphanedWorktreeDeletion,
+      getCurrentRouteThreadRef,
+      removeOrphanedWorktree,
+      resolveThreadTarget,
+    ],
   );
 
   const unarchiveThread = useCallback(async (target: ScopedThreadRef) => {
@@ -121,26 +250,16 @@ export function useThreadActions() {
         deletedIds && deletedIds.size > 0
           ? threads.filter((entry) => entry.id === threadRef.threadId || !deletedIds.has(entry.id))
           : threads;
-      const orphanedWorktreePath = getOrphanedWorktreePathForThread(
+      const cleanupContext = await confirmOrphanedWorktreeDeletion(
+        {
+          environmentId: threadRef.environmentId,
+          threadId: threadRef.threadId,
+        },
         survivingThreads,
-        threadRef.threadId,
       );
-      const displayWorktreePath = orphanedWorktreePath
-        ? formatWorktreePathForDisplay(orphanedWorktreePath)
-        : null;
-      const canDeleteWorktree = orphanedWorktreePath !== null && threadProject !== undefined;
-      const localApi = readLocalApi();
-      const shouldDeleteWorktree =
-        canDeleteWorktree &&
-        localApi &&
-        (await localApi.dialogs.confirm(
-          [
-            "This thread is the only one linked to this worktree:",
-            displayWorktreePath ?? orphanedWorktreePath,
-            "",
-            "Delete the worktree too?",
-          ].join("\n"),
-        ));
+      const orphanedWorktreePath = cleanupContext?.orphanedWorktreePath ?? null;
+      const displayWorktreePath = cleanupContext?.displayWorktreePath ?? null;
+      const shouldDeleteWorktree = Boolean(cleanupContext?.shouldDeleteWorktree);
 
       if (thread.session && thread.session.status !== "closed") {
         await api.orchestration
@@ -241,6 +360,7 @@ export function useThreadActions() {
       getCurrentRouteThreadRef,
       router,
       queryClient,
+      confirmOrphanedWorktreeDeletion,
       resolveThreadTarget,
       sidebarThreadSortOrder,
     ],

@@ -8,7 +8,10 @@ You only need to do this once per machine. These are the runtime versions we've 
 
 ```bash
 # Install Bun (the package manager) at the version pinned in package.json.
-brew install bun@1.3.11
+asdf plugin add bun
+asdf install bun 1.3.11
+asdf set bun 1.3.11
+asdf reshim
 bun --version  # should print 1.3.11
 
 # Install Node 24 via asdf (matches the engines field in package.json).
